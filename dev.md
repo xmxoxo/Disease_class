@@ -57,3 +57,28 @@ num_classes = [20,62]
 创建模型
 model = MModel(config_path, checkpoint_path, num_classes)
 ```
+
+## 数据处理
+
+分类`label_j`的标签值是从-1到60，全部+1，转换成0到61，共62个；
+
+```
+python data_process.py
+```
+
+生成的数据会保存到`data` 目录下；
+
+
+## 模型训练
+
+bert4keras架构的多任务模型
+
+```
+python multi_task_model.py --task=train --epochs=1 --bert_path=预训练目录 
+```
+
+预测数据生成提交文件：
+
+```
+python multi_task_model.py --task=eval
+```
