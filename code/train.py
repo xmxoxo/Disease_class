@@ -50,8 +50,8 @@ def train(model, train_iter, val_iter, epoch):
 
     total_batch = 0
     dev_best_acc = float('-inf')
-    last_improve = 0
-    flag = False
+    # last_improve = 0
+    # flag = False
     train_loss_list = []
     train_acc_list = []
     batch_list = []
@@ -64,8 +64,8 @@ def train(model, train_iter, val_iter, epoch):
         for i, (content, labels) in enumerate(train_iter):
             cat_id_out, label_out = model(content)
             model.zero_grad()
-            cat_id = labels[1]
-            label = labels[0]
+            cat_id = labels[0]
+            label = labels[1]
             loss_1 = fn_loss(cat_id_out, cat_id)
             loss_2 = fn_loss(label_out, label)
             loss = loss_1 + loss_2
@@ -92,7 +92,7 @@ def train(model, train_iter, val_iter, epoch):
                     dev_best_acc = dev_acc
                     torch.save(model.state_dict(), model_path)
                     improve = '*'
-                    last_improve = total_batch
+                    # last_improve = total_batch
                 else:
                     improve = '~'
                 time_idf = get_time_dif(start_time)
@@ -148,73 +148,70 @@ def evaluate(model, val_iter):
 
     return acc, loss_total/len(val_iter)
 
-
-def test(model, test_iter):
-    """
-    模型的测试
-    """
-    model.load_state_dict(torch.load(model_path))
-    model.eval()
-    loss_total = 0
-    predict_cat_all = np.array([], dtype=int)
-    predict_label_all = np.array([], dtype=int)
-    labels_cat_all = np.array([], dtype=int)
-    labels_label_all = np.array([], dtype=int)
-    with torch.no_grad():
-        for idx, (content, labels) in enumerate(test_iter):
-            cat_id_out, label_out = model(content)
-            facal_loss = nn.CrossEntropyLoss()
-            cat_id = labels[1]
-            label = labels[0]
-            loss1 = facal_loss(cat_id_out, cat_id)
-            loss2 = facal_loss(label_out, label)
-            loss = loss1 + loss2
-            loss_total += loss.item()
-            cat_id = cat_id.data.cpu().numpy()
-            label = label.data.cpu().numpy()
-            predict_cat_id = torch.max(cat_id_out.data, 1)[1].cpu().numpy()
-            predict_label = torch.max(label_out.data, 1)[1].cpu().numpy()
-            # labels_all = np.append(labels_all, cat_id)
-            # labels_all = np.append(labels_all, label)
-            # predict_all = np.append(predict_all, predict_cat_id)
-            # predict_all = np.append(predict_all, predict_label)
-            predict_cat_all = np.append(predict_cat_all, predict_cat_id)
-            predict_label_all = np.append(predict_label_all, predict_label)
-            labels_cat_all = np.append(labels_cat_all, cat_id)
-            labels_label_all = np.append(labels_label_all, label)
-
-        acc_cat = metrics.accuracy_score(predict_cat_all, labels_cat_all)
-        acc_label = metrics.accuracy_score(predict_label_all, labels_label_all)
-
-        # report:精确率, 准确率, 召回率
-        report_cat = metrics.classification_report(predict_cat_all, labels_cat_all, target_names=class_cat, digits=4)
-        report_label = metrics.classification_report(predict_label_all, labels_label_all,
-                                                     target_names=class_label, digits=4)
-
-        confusion_cat = metrics.confusion_matrix(predict_cat_all, labels_cat_all)  # 混淆矩阵
-        confusion_label = metrics.confusion_matrix(predict_label_all, labels_label_all)
-    return acc_cat, acc_label, loss_total/len(test_iter), report_cat, report_label, confusion_cat, confusion_label
+# def test(model, test_iter):
+#     """
+#     模型的测试
+#     """
+#     model.load_state_dict(torch.load(model_path))
+#     model.eval()
+#     loss_total = 0
+#     predict_cat_all = np.array([], dtype=int)
+#     predict_label_all = np.array([], dtype=int)
+#     labels_cat_all = np.array([], dtype=int)
+#     labels_label_all = np.array([], dtype=int)
+#     with torch.no_grad():
+#         for idx, (content, labels) in enumerate(test_iter):
+#             cat_id_out, label_out = model(content)
+#             facal_loss = nn.CrossEntropyLoss()
+#             cat_id = labels[1]
+#             label = labels[0]
+#             loss1 = facal_loss(cat_id_out, cat_id)
+#             loss2 = facal_loss(label_out, label)
+#             loss = loss1 + loss2
+#             loss_total += loss.item()
+#             cat_id = cat_id.data.cpu().numpy()
+#             label = label.data.cpu().numpy()
+#             predict_cat_id = torch.max(cat_id_out.data, 1)[1].cpu().numpy()
+#             predict_label = torch.max(label_out.data, 1)[1].cpu().numpy()
+#             # labels_all = np.append(labels_all, cat_id)
+#             # labels_all = np.append(labels_all, label)
+#             # predict_all = np.append(predict_all, predict_cat_id)
+#             # predict_all = np.append(predict_all, predict_label)
+#             predict_cat_all = np.append(predict_cat_all, predict_cat_id)
+#             predict_label_all = np.append(predict_label_all, predict_label)
+#             labels_cat_all = np.append(labels_cat_all, cat_id)
+#             labels_label_all = np.append(labels_label_all, label)
+#
+#         acc_cat = metrics.accuracy_score(predict_cat_all, labels_cat_all)
+#         acc_label = metrics.accuracy_score(predict_label_all, labels_label_all)
+#
+#         # report:精确率, 准确率, 召回率
+#         report_cat = metrics.classification_report(predict_cat_all, labels_cat_all, target_names=class_cat, digits=4)
+#         report_label = metrics.classification_report(predict_label_all, labels_label_all,
+#                                                      target_names=class_label, digits=4)
+#
+#         confusion_cat = metrics.confusion_matrix(predict_cat_all, labels_cat_all)  # 混淆矩阵
+#         confusion_label = metrics.confusion_matrix(predict_label_all, labels_label_all)
+#     return acc_cat, acc_label, loss_total/len(test_iter), report_cat, report_label, confusion_cat, confusion_label
 
 
 if __name__ == '__main__':
     from model import Model
-    from data import get_loader
-    from data import Data
-    from data import collate_fn
+    from dataset import get_loader
+    from dataset import Data
+    from dataset import collate_fn
 
-    train_loader = get_loader(train=True)
-    test_loader = get_loader(test=True)
-    val_loader = get_loader(val=True)
+    train_loader, dev_loader = get_loader()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    roberta_path = '../roberta_pretrain'
+    roberta_path = 'roberta_pretrain'
     model = Model(roberta_path).to(device)
-    train(model, train_loader, val_loader, 5)
-    acc_cat, acc_label, loss, report_cat, report_label, confusion_cat, confusion_label = test(model, test_loader)
-    print('acc_cat:', acc_cat)
-    print('acc_label:', acc_label)
-    print('loss:', loss)
-    print('report_cat:', report_cat)
-    print('report_label:', report_label)
-    print('confusion_cat:', confusion_cat)
-    print('confusion_label:', confusion_label)
+    train(model, train_loader, dev_loader, 5)
+    # acc_cat, acc_label, loss, report_cat, report_label, confusion_cat, confusion_label = test(model, test_loader)
+    # print('acc_cat:', acc_cat)
+    # print('acc_label:', acc_label)
+    # print('loss:', loss)
+    # print('report_cat:', report_cat)
+    # print('report_label:', report_label)
+    # print('confusion_cat:', confusion_cat)
+    # print('confusion_label:', confusion_label)

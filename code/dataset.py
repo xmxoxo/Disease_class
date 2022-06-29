@@ -6,17 +6,17 @@ import os
 import pickle as pkl
 import pandas as pd
 
-bert_path = ''
-data_path = ''
-dataset_pkl = ''
+bert_path = 'roberta_pretrain'
+data_path = 'data/data_train.csv'
+dataset_pkl = 'data/dataset.pkl'
 tokenizer = BertTokenizer.from_pretrained(bert_path)
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
 class Data(Dataset):
-    def __init__(self, train=True):
+    def __init__(self, path, train=True):
         self.data = []
-        df = pd.read_csv('data/data_train.csv')
+        df = pd.read_csv(path)
         if train:
             content = df['content'].to_list()[:20580]
             label_1 = df['label_i'].to_list()[:20580]
@@ -43,22 +43,22 @@ class Data(Dataset):
     def __len__(self):
         return len(self.data)
 
-
-if os.path.exists(dataset_pkl):
-    dataset = pkl.load(open(dataset_pkl, 'rb'))
-    train_data = dataset['train']
-    # test_data = dataset['test']
-    dev_data = dataset['dev']
-else:
-    dataset = {}
-    train_data = Data(train=True)
-    # test_data = Data(config.test_data_path)
-    dev_data = Data(train=False)
-    dataset['train'] = train_data
-    # dataset['test'] = test_data
-    dataset['dev'] = dev_data
-    pkl.dump(dataset, open(dataset_pkl, 'wb'))
-
+def get_loader():
+    if os.path.exists(dataset_pkl):
+        dataset = pkl.load(open(dataset_pkl, 'rb'))
+        train_loader = dataset['train']
+        # test_data = dataset['test']
+        dev_loader = dataset['dev']
+    else:
+        dataset = {}
+        train_data = Data(path=data_path, train=True)
+        dev_data = Data(path=data_path, train=False)
+        train_loader = data_loader(train_data)
+        dev_loader = data_loader(dev_data)
+        dataset['train'] = train_loader
+        dataset['dev'] = dev_loader
+        pkl.dump(dataset, open(dataset_pkl, 'wb'))
+    return train_loader,  dev_loader
 
 def collate_fn(batch):
     input_ids, token_type_ids, mask, label_1, label_2 = zip(*batch)
@@ -68,9 +68,18 @@ def collate_fn(batch):
     label_1 = torch.LongTensor(label_1).to(device)
     label_2 = torch.LongTensor(label_2).to(device)
 
-    return (input_ids, mask, token_type_ids), label_1, label_2
+    return (input_ids, mask, token_type_ids), (label_1, label_2)
 
 
 def data_loader(data):
     loader = DataLoader(data, batch_size=32, shuffle=True, collate_fn=collate_fn)
     return loader
+
+
+if __name__ == '__main__':
+    train_loader, dev_loader = get_loader()
+    for content, label in train_loader:
+        print(content[0])
+        print(label[0])
+        print(label[1])
+        break

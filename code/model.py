@@ -21,7 +21,7 @@ class Model(nn.Module):
         self.config = BertConfig.from_pretrained(bert_path)
         self.bert = BertModel.from_pretrained(bert_path)
         self.linear_1 = nn.Linear(self.config.hidden_size, 20)
-        self.linear_2 = nn.Linear(self.config.hidden_size, 61)
+        self.linear_2 = nn.Linear(self.config.hidden_size, 62)
 
     def forward(self, x):
         input_ids = x[0]
