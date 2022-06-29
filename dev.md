@@ -46,11 +46,14 @@ def MModel(config_path, checkpoint_path, num_classes):
     return model
 
 # 模型目录
-config_path = ''
-checkpoint_path = ''
+bert_path = r'F:\models\chinese_L-12_H-768_A-12'
+config_path = os.path.join(bert_path, 'bert_config.json')
+checkpoint_path = os.path.join(bert_path, 'bert_model.ckpt')
+dict_path = os.path.join(bert_path, 'vocab.txt')
 
 # 分类大小
-num_classes = [20,61]
+num_classes = [20,62]
+
 创建模型
 model = MModel(config_path, checkpoint_path, num_classes)
 ```
