@@ -80,5 +80,46 @@ python multi_task_model.py --task=train --epochs=1 --bert_path=预训练目录
 预测数据生成提交文件：
 
 ```
+python multi_task_model.py --task=predict
+```
+
+生成的提交文件在：`models/submit.csv`
+
+线上提交后得分为：`0.88533`
+
+
+在验证数据集上进行验证并计算指标：
+
+```
 python multi_task_model.py --task=eval
 ```
+
+在验证集上验证的结果：
+```
+143/143 [==============================] - 15s 106ms/step
+----------------Task: 0-----------------
+Accuracy:0.89 Recall:0.89 F1-macro:0.88
+----------------Task: 1-----------------
+Accuracy:0.66 Recall:0.66 F1-micro:0.66
+F1_total:1.5430
+```
+
+结果分析：
+线上得分非常低，都没有超过1；分析了提交的数据：
+```
+python data_process.py --task=submit_test
+```
+
+可以看到提交的结果中,`label_j`这个任务里，分类为0-61，总数是62个；
+而题目中说明的是:
+
+```
+以及就诊方向标签label_i∈int [0,19]，
+疾病方向标签label_j∈int [0,60] 
+(训练数据中疾病方向标签存在缺失，以-1标记，测试数据中没有)。
+```
+说明 'label_j'这个任务正确的输出应该是0-60总共61个分类；
+对于数据集中标有-1的样本，不应该转换标签，而是应该删除或者做其它处理。
+
+Todo: 先把训练集中`label_j`列为-1的样本删除，重新训练模型，重新提交预测结果；
+

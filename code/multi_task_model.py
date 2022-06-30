@@ -111,14 +111,14 @@ def load_data(filename):
                 text, label1, label2 = x[:3]
             if text:
                 label = [int(label1), int(label2)]
-                
+
                 '''
                 Y0 = to_categorical(int(label1), 20)
                 Y1 = to_categorical(int(label2), 62)
                 label = np.concatenate((Y0, Y1), axis=0).tolist()
                 '''
                 D.append((text, label))
-    return D#[:31]
+    return D#[:32]
 
 
 def load_all_data(path):
@@ -186,7 +186,7 @@ print('正在创建模型...')
 # 分类大小
 num_classes = [20, 62]
 model = MModel(config_path, checkpoint_path, num_classes)
-model.summary()
+# model.summary()
 print('model output:', model.output)
 #sys.exit()
 
@@ -211,7 +211,7 @@ model.compile(
 )
 
 # 加载数据集
-train_data, valid_data, test_data =load_all_data(data_path)
+train_data, valid_data, test_data = load_all_data(data_path)
 
 # 转换数据集
 train_generator = data_generator(train_data, batch_size)
@@ -229,17 +229,20 @@ sys.exit()
 
 def evaluate(data):
     total, right = 0., 0.
+    y_trues = []
+    y_preds = []
     for x_true, y_true in data:
         y_pred = model.predict(x_true)
         #print('y_pred=', y_pred)
         y_pred = np.array([y_pred[0].argmax(axis=1), y_pred[1].argmax(axis=1)])
+        y_preds.append(y_pred)
         y_pred = np.array(list(zip(*y_pred)))
         #y_pred = list(zip(*y_pred))
         #print('y_pred=', y_pred)
         
-
         #print('y_true=', y_true)
         y_true = np.array((y_true))
+        y_trues.append(y_true)
         #print('y_pred=', y_pred)
         y_true = np.array(list(zip(*y_true)))
         #print('y_true=', y_true)
@@ -367,7 +370,29 @@ def calc_test_acc(y_pred, test_y):
 
     #return y_pred, test_acc
  
+def multitask_model_sclre(y_true, y_pred):
+    from sklearn.metrics import f1_score, accuracy_score, recall_score
+    # 多少个任务
+    task_count = y_true.shape[1]
+    f1_final = 0
+    for i in range(task_count):
+        print( ('Task: %d'%i).center(40, '-'))
+        y_t = y_true[:, i]
+        y_p = y_pred[:, i]
+        acc = accuracy_score(y_t, y_p)
+        recall = accuracy_score(y_t, y_p)
+        if i==0:
+            f1 = f1_score(y_t, y_p, average='macro')  #weighted  macro micro)
+            print('Accuracy:%.2f Recall:%.2f F1-macro:%.2f' % (acc, recall, f1))
+        else:
+            f1 = f1_score(y_t, y_p, average='micro')  #weighted  macro micro)
+            print('Accuracy:%.2f Recall:%.2f F1-micro:%.2f' % (acc, recall, f1))
+            
+        f1_final += f1
 
+    print('F1_total:%.4f' % f1_final)
+    return f1_final
+    
 if __name__ == '__main__':
     
     def save_run():
@@ -408,16 +433,20 @@ if __name__ == '__main__':
         # 画训练曲线图
         plot_loss(model_outpath)
 
-    if task in ['predict']: 
+    if task in ['train', 'predict']: 
         # 批量预测
-        print('正在预测数据...')
+        print('正在预测测试集数据...')
         label_dict = {}
         if label_dict_file:
             label_dict = load_catalog(label_dict_file)
+
+        # 加载数据
+        # train_data, valid_data, test_data = load_all_data(data_path)
         
         # 加载模型 
         model.load_weights(model_file_weight)
 
+        '''
         # 加载待预测数据, 格式：一行一条数据 
         pred_file = args.pred_file
         # 生成输出文件名
@@ -427,31 +456,10 @@ if __name__ == '__main__':
         
         predict_test(model, pred_file, outfile, label_dict=label_dict)
         print('预测结果已保存:%s' % outfile)
-    
-    if task in ['train', 'eval']:
-        # 加载数据
-        if task == 'eval':
-            train_data, valid_data, test_data = load_all_data(data_path)
-
-        # 如果测试集为空则加载验证集
-        if len(test_data) == 0:
-            test_generator = data_generator(valid_data, batch_size)
-        else:
-            test_generator = data_generator(test_data, batch_size)
-        
-
-        # 加载模型
-        print('正在加载模型...')
-        model = MModel(config_path, checkpoint_path, num_classes)
-        model.load_weights(model_file_weight)
-        if not os.path.exists(model_file_h5):
-            model.save(model_file_h5)
-
-        print('正在验证数据集...')
+        '''
         pred = model.predict_generator(test_generator.forfit(random=False), 
-                        steps=len(test_generator), verbose=1)
+                                        steps=len(test_generator), verbose=1)
 
-        #y_pred = np.argmax(pred, axis=1)
         y_pred = [pred[0].argmax(axis=1), pred[1].argmax(axis=1)]
 
         # 保存预测的提交结果
@@ -460,8 +468,44 @@ if __name__ == '__main__':
         df.to_csv(subfile, index=0)
         print('提交文件已生成：%s'%subfile)
 
-        #test_y = [x[1] for x in test_data]
-        #calc_test_acc(y_pred, test_y)
+    
+    if task in ['train', 'eval']:
+        # 加载数据
+        #if task == 'eval':
+        #    train_data, valid_data, test_data = load_all_data(data_path)
+        y_true = np.array([x[1] for x in valid_data])
+        '''
+        print('y_true.shape:', y_true.shape)
+        print(y_true)
+        print('-'*40)
+        #sys.exit()
+        '''
+
+        # 加载验证集
+        if 1 or len(test_data) == 0:
+            data_generator = data_generator(valid_data, batch_size)
+        else:
+            data_generator = data_generator(test_data, batch_size)
+
+        # 加载模型
+        print('正在加载模型...')
+        model.load_weights(model_file_weight)
+
+        print('正在验证数据集...')
+        pred = model.predict_generator(data_generator.forfit(random=False), 
+                        steps=len(data_generator), verbose=1)
+
+        y_pred = np.array([pred[0].argmax(axis=1), pred[1].argmax(axis=1)])
+        y_pred = y_pred.T
+        '''
+        print('y_pred.shape:', y_pred.shape)
+        print(y_pred)
+        print('-'*40)
+        '''
+
+        # 计算多任务模型中各个任务的F1值
+        multitask_model_sclre(y_true, y_pred)
+
 
     if task == 'online': # 实时预测        
         # 加载label字典
