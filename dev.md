@@ -178,4 +178,68 @@ Todo: 先把训练集中`label_j`列为-1的样本删除，重新训练模型，
 对比后感觉还是 **伪标签法** 比较好，对label_j再做了一次训练；
 
 
+## 伪标签法训练
 
+重新处理数据：
+```
+python data_process.py --task=data_trans
+```
+
+重新生成训练文件以及"-1标签集"数据文件：`label_j.tsv`
+
+训练模型A：
+
+```
+python multi_task_model.py --task=train --epochs=30 --batch_size=48 --model_outpath=model_a
+```
+
+训练过程：
+```
+Epoch 24/30
+236/236 [==============================] - 107s 454ms/step - loss: 0.2502 - out_0_loss: 0.0510 - out_1_loss: 0.1992 - out_0_acc: 0.9880 - out_1_acc: 0.9415
+val_acc: 0.76637, best_val_acc: 0.76885
+
+Epoch 25/30
+236/236 [==============================] - 108s 456ms/step - loss: 0.2389 - out_0_loss: 0.0477 - out_1_loss: 0.1911 - out_0_acc: 0.9884 - out_1_acc: 0.9436
+val_acc: 0.76708, best_val_acc: 0.76885
+
+Epoch 26/30
+236/236 [==============================] - 106s 451ms/step - loss: 0.2348 - out_0_loss: 0.0485 - out_1_loss: 0.1863 - out_0_acc: 0.9884 - out_1_acc: 0.9437
+val_acc: 0.76602, best_val_acc: 0.76885
+
+Epoch 27/30
+236/236 [==============================] - 107s 452ms/step - loss: 0.2212 - out_0_loss: 0.0425 - out_1_loss: 0.1787 - out_0_acc: 0.9912 - out_1_acc: 0.9472
+val_acc: 0.76566, best_val_acc: 0.76885
+
+Epoch 28/30
+236/236 [==============================] - 107s 454ms/step - loss: 0.2119 - out_0_loss: 0.0407 - out_1_loss: 0.1712 - out_0_acc: 0.9912 - out_1_acc: 0.9512
+val_acc: 0.76425, best_val_acc: 0.76885
+
+Epoch 29/30
+236/236 [==============================] - 107s 453ms/step - loss: 0.2010 - out_0_loss: 0.0394 - out_1_loss: 0.1615 - out_0_acc: 0.9908 - out_1_acc: 0.9548
+val_acc: 0.76531, best_val_acc: 0.76885
+
+Epoch 30/30
+236/236 [==============================] - 106s 451ms/step - loss: 0.2013 - out_0_loss: 0.0400 - out_1_loss: 0.1613 - out_0_acc: 0.9904 - out_1_acc: 0.9548
+val_acc: 0.76673, best_val_acc: 0.76885
+
+正在保存训练数据...
+训练曲线图已保存。
+正在预测测试集数据...
+159/159 [==============================] - 23s 146ms/step
+提交文件已生成：model_a/submit.csv
+正在加载模型...
+正在验证数据集...
+59/59 [==============================] - 8s 144ms/step
+----------------Task: 0-----------------
+Accuracy:0.88 Recall:0.88 F1-macro:0.88
+----------------Task: 1-----------------
+Accuracy:0.79 Recall:0.79 F1-micro:0.79
+F1_total:1.6621
+
+```
+
+训练完成后，预测-1标签数据集并处理：
+```
+python multi_task_model.py --task=predict --model_outpath=model_a --prefile=data/label_j.tsv
+```

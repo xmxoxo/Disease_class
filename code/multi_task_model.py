@@ -197,10 +197,12 @@ model = MModel(config_path, checkpoint_path, num_classes)
 print('model output:', model.output)
 #sys.exit()
 
+'''
 if frozen == 1:
     # 冻住指定的out_1层 禁止训练
     layer_out_1 = model.get_layer('out_1')
     layer_out_1.trainable = False
+'''
 
 # 派生为带分段线性学习率的优化器。
 # 其中name参数可选，但最好填入，以区分不同的派生优化器。
