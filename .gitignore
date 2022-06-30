@@ -13,3 +13,8 @@ code/data/data_train1.csv
 code/data/test.tsv
 code/models/model.weights
 code/multi_task_model1.py
+code/data/data_test.xlsx
+code/data/data_train.csv
+code/data/data_train.xlsx
+code/data/label_j.tsv
+code/data/data_train.csv
