@@ -9,3 +9,7 @@ code/models/result_out_0_acc.png
 code/models/result_out_0_loss.png
 code/models/result_out_1_acc.png
 code/models/result_out_1_loss.png
+code/data/data_train1.csv
+code/data/test.tsv
+code/models/model.weights
+code/multi_task_model1.py

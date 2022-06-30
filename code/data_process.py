@@ -3,6 +3,7 @@
 
 __author__ = 'xmxoxo<xmxoxo@qq.com>'
 
+import argparse
 import os
 import sys
 import re
@@ -63,6 +64,35 @@ def data_trans():
     print('预测数据已保存')
 
 
+def submit_test():
+    # 提交数据分析
+    fname = 'models/submit.csv'
+    df = pd.read_csv(fname)
+    print(df.info())
+    dd = df['label_j'].value_counts()
+    print(dd.index)
+    print('-'*40)
+    print(list(zip(dd.index, dd.tolist())))
+    print('-'*40)
+    print(sorted(dd.index))
+
 if __name__ == '__main__':
     pass
-    data_trans()
+    parser = argparse.ArgumentParser(description='数据预处理')
+    parser.add_argument('--task', type=str, required=True, default="", help='处理命令')
+    parser.add_argument('--fname', type=str, default="", help='处理文件或者目录')
+    parser.add_argument('--outpath', type=str, default="", help='输出文件或目录')
+    parser.add_argument('--topn', type=int, default=1000, help='topn')
+
+    args = parser.parse_args()
+    task = args.task
+    fname = args.fname
+    outpath = args.outpath
+    topn = args.topn
+
+    if task=='data_trans':
+        data_trans()
+
+    if task=='submit_test':
+        submit_test()
+
