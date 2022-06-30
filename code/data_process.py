@@ -22,6 +22,9 @@ def data_trans():
             df[col] = df[col].apply(lambda x:re.sub('([\n\t\r])', "", x))
     # label_j字段值+1；由-1~60变为 0~61
     df['label_j'] = df['label_j'] +1 
+    
+    # 去掉label_j字段值中-1
+    #df = df[~df['label_j'].isin([-1])]
 
     # 合并字段： age diseaseName conditionDesc title hopeHelp
     df['content'] = df['age'] + ';' + df['diseaseName'] + ';' + df['conditionDesc'] + ';' + df['title'] + ';' + df['hopeHelp']
