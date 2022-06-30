@@ -74,7 +74,7 @@ python data_process.py --task=data_trans
 bert4keras架构的多任务模型
 
 ```
-python multi_task_model.py --task=train --epochs=1 --bert_path=预训练目录 
+python multi_task_model.py --task=train --epochs=1 --bert_path=预训练目录 --batch_size=32
 ```
 
 预测数据生成提交文件：
