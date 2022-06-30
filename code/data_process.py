@@ -9,6 +9,8 @@ import sys
 import re
 import pandas as pd
 
+pl = lambda x='-': print(x*40)
+
 def data_trans():
     fname = 'data/data_train.xlsx'
     df = pd.read_excel(fname)
@@ -20,15 +22,27 @@ def data_trans():
     for col in df.columns:
         if df[col].dtype==object:
             df[col] = df[col].apply(lambda x:re.sub('([\n\t\r])', "", x))
+    
+    '''
     # label_j字段值+1；由-1~60变为 0~61
     df['label_j'] = df['label_j'] +1 
+    '''
 
     # 合并字段： age diseaseName conditionDesc title hopeHelp
     df['content'] = df['age'] + ';' + df['diseaseName'] + ';' + df['conditionDesc'] + ';' + df['title'] + ';' + df['hopeHelp']
     df_out = df[['content','label_i','label_j']]
-    # 保存
+    # 保存所有数据
     df_out.to_csv('data/data_train.csv', index=0)
-    
+
+    # 2022/6/30 把 label_j 列中为-1值的样本提取出来, 另存为'label_j.tsv'
+    ff = df_out[df['label_j']==-1]
+    ff.to_csv('data/label_j.tsv', index=0, header=None, sep='\t')
+    print('ff.shape:', ff.shape)
+    pl()
+    # 删除-1的样本
+    df_out = df_out.drop(index=ff.index)
+    print(df_out.info())
+
     # 打乱，拆分
     df_out = df_out.sample(frac=1)
     length = df_out.shape[0]

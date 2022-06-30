@@ -36,7 +36,8 @@ parser.add_argument('--batch_size', type=int, default=32, help='batch_size=32')
 parser.add_argument('--epochs', type=int, default=10, help='epochs=10')
 parser.add_argument('--lr', type=float, default=1e-5, help='learning_rate')
 #parser.add_argument('--label_dict', type=str, default='', help='分类字典')
-parser.add_argument('--pred_file', type=str, default='', help='预测文件')
+parser.add_argument('--pred_file', type=str, default='data/test.tsv', help='预测文件')
+parser.add_argument('--preload_model', type=str, default='', help='预加载模型文件')
 parser.add_argument('--debug', type=int, default=0, help='debug')
 
 args = parser.parse_args()
@@ -45,11 +46,12 @@ epochs = args.epochs
 learning_rate = args.lr
 batch_size = args.batch_size
 data_path = args.data_path
+model_outpath = args.model_outpath
 bert_path = args.bert_path
 #label_dict_file = args.label_dict
 label_dict_file = ''
 debug = args.debug
-model_outpath = args.model_outpath
+preload_model = args.preload_model
 
 maxlen = 256
 set_gelu('tanh')  # 切换gelu版本
@@ -62,7 +64,7 @@ if bert_path == '':
         bertbase = 'chinese_L-12_H-768_A-12'
         bert_path = '/mnt/sda1/models/' + bertbase
 
-if task=='train' :
+if preload_model == '' :
     preload = 0
 else:
     preload = 1
@@ -114,7 +116,7 @@ def load_data(filename):
 
                 '''
                 Y0 = to_categorical(int(label1), 20)
-                Y1 = to_categorical(int(label2), 62)
+                Y1 = to_categorical(int(label2), 61)
                 label = np.concatenate((Y0, Y1), axis=0).tolist()
                 '''
                 D.append((text, label))
@@ -173,10 +175,15 @@ def MModel(config_path, checkpoint_path, num_classes):
     #output = Lambda(lambda x: K.mean(x, axis=1), name='MEAN-token')(bert.model.output)
     output = Lambda(lambda x: x[:, 0], name='CLS-token')(bert.model.output)
 
+    '''
     out = []
     for i,num in enumerate(num_classes):
         tmp = Dense(units=num, activation='softmax', name='out_%d'%i)(output)
         out.append(tmp)
+    '''
+    out_0 = Dense(units=num_classes[0], activation='softmax', name='out_0')(output)
+    out_1 = Dense(units=num_classes[1], activation='softmax', name='out_1')(output)
+    out = [out_0, out_1]
 
     # out = Concatenate(axis=1)(out)
     model = Model(bert.model.input, out, name="MModel")
@@ -184,11 +191,16 @@ def MModel(config_path, checkpoint_path, num_classes):
 
 print('正在创建模型...')
 # 分类大小
-num_classes = [20, 62]
+num_classes = [20, 61]
 model = MModel(config_path, checkpoint_path, num_classes)
 # model.summary()
 print('model output:', model.output)
 #sys.exit()
+
+if frozen == 1:
+    # 冻住指定的out_1层 禁止训练
+    layer_out_1 = model.get_layer('out_1')
+    layer_out_1.trainable = False
 
 # 派生为带分段线性学习率的优化器。
 # 其中name参数可选，但最好填入，以区分不同的派生优化器。
@@ -414,7 +426,7 @@ if __name__ == '__main__':
     if task == 'train':
         save_run()
         if preload==1:
-            model.load_weights(aa)
+            model.load_weights(preload_model)
             print('模型已加载。')
 
         evaluator = Evaluator()
