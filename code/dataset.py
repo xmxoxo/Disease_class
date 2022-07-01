@@ -7,15 +7,13 @@ import pickle as pkl
 import pandas as pd
 
 
-# Ԥѵ��ģ��Ŀ¼
+# Ԥѵ��ģ��Ŀ¼
 bert_path = 'roberta_pretrain'
-bert_path = '/mnt/sda1/models/roberta-base_pytorch'
-bert_path = '/mnt/sda1/models/chinese_wwm_pytorch'
-
-data_path = 'data/data_train.csv'
+data_path = 'data/train_j.csv'
 dataset_pkl = 'data/dataset.pkl'
 tokenizer = BertTokenizer.from_pretrained(bert_path)
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
+label_j_path = 'data/test_j.csv'
 
 
 class Data(Dataset):
@@ -23,18 +21,18 @@ class Data(Dataset):
         self.data = []
         df = pd.read_csv(path)
         if train:
-            content = df['content'].to_list()[:20580]
-            label_1 = df['label_i'].to_list()[:20580]
-            label_2 = df['label_j'].to_list()[:20580]
+            content = df['content'].to_list()[:13619]
+            label_1 = df['label_i'].to_list()[:13619]
+            label_2 = df['label_j'].to_list()[:13619]
             for idx, con in tqdm(enumerate(content)):
                 encode_dict = tokenizer.encode_plus(con, max_length=280, padding='max_length',
                                                     truncation=True)
                 self.data.append((encode_dict['input_ids'], encode_dict['token_type_ids'],
                                   encode_dict['attention_mask'], int(label_1[idx]), int(label_2[idx])))
         else:
-            content = df['content'].to_list()[20580:]
-            label_1 = df['label_i'].to_list()[20580:]
-            label_2 = df['label_j'].to_list()[20580:]
+            content = df['content'].to_list()[13619:]
+            label_1 = df['label_i'].to_list()[13619:]
+            label_2 = df['label_j'].to_list()[13619:]
             for idx, con in tqdm(enumerate(content)):
                 encode_dict = tokenizer.encode_plus(con, max_length=280, padding='max_length',
                                                     truncation=True)
@@ -47,6 +45,29 @@ class Data(Dataset):
 
     def __len__(self):
         return len(self.data)
+
+
+class DataTest(Dataset):
+    """预测label_j数据加载器"""
+    def __init__(self, path):
+        self.data = []
+        df = pd.read_csv(path)
+        content = df['content'].to_list()
+        label_1 = df['label_i'].to_list()
+        label_2 = df['label_j'].to_list()
+        for idx, con in tqdm(enumerate(content)):
+            encode_dict = tokenizer.encode_plus(con, max_length=280, padding='max_length',
+                                                truncation=True)
+            self.data.append((encode_dict['input_ids'], encode_dict['token_type_ids'],
+                              encode_dict['attention_mask'], int(label_1[idx]), int(label_2[idx])))
+
+    def __getitem__(self, item):
+        self.content = self.data[item]
+        return self.content
+
+    def __len__(self):
+        return len(self.data)
+
 
 def get_loader():
     if os.path.exists(dataset_pkl):
@@ -65,6 +86,7 @@ def get_loader():
         pkl.dump(dataset, open(dataset_pkl, 'wb'))
     return train_loader,  dev_loader
 
+
 def collate_fn(batch):
     input_ids, token_type_ids, mask, label_1, label_2 = zip(*batch)
     input_ids = torch.LongTensor(input_ids).to(device)
@@ -82,9 +104,14 @@ def data_loader(data):
 
 
 if __name__ == '__main__':
-    train_loader, dev_loader = get_loader()
-    for content, label in train_loader:
-        print(content[0])
-        print(label[0])
-        print(label[1])
+    # train_loader, dev_loader = get_loader()
+    # for content, label in train_loader:
+    #     print(content[0])
+    #     print(label[0])
+    #     print(label[1])
+    #     break
+    label_j_dataset = data_loader(DataTest(label_j_path))
+    for contents, labels in label_j_dataset:
+        print(labels[0])
+        print(labels[1])
         break

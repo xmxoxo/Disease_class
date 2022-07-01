@@ -23,7 +23,7 @@ class_cat = ['乳腺外科', '产前检查', '内科', '呼吸内科', '咽喉�
 class_label = ['乳房囊肿', '乳腺增生','乳腺疾病', '乳腺肿瘤','产前检查', '儿童保健', '先兆流产', '内科其他', '剖腹产', '发育迟缓','呼吸内科其他',
                '咽喉疾病', '喉疾病', '围产保健', '外阴疾病', '妇科病', '宫腔镜', '小儿呼吸系统疾病', '小儿咳嗽', '小儿感冒', '小儿支气管炎',
                '小儿支气管肺炎', '小儿消化不良', '小儿消化疾病', '小儿耳鼻喉其他', '小儿肺炎', '心内科其他', '心脏病', '扁桃体炎', '早孕反应',
-               '月经失调', '桥本甲状腺炎', '消化不良', '消化内科其他' ,'消化道出血', '甲减', '甲状腺功能异常', '甲状腺疾病', '甲状腺瘤',
+               '月经失调', '桥本甲状腺炎', '消化不良', '消化内科其他', '消化道出血', '甲减', '甲状腺功能异常', '甲状腺疾病', '甲状腺瘤',
                '甲状腺结节', '痔疮', '皮肤病', '皮肤瘙痒', '皮肤科其他', '直肠肛管疾病', '眼部疾病', '神经内科其他', '微量元素缺乏', '羊水异常',
                '肺部疾病', '胃病', '脊柱退行性变', '腰椎间盘突出', '腹泻', '腹痛', '膝关节半月板损伤', '膝关节损伤', '膝关节韧带损伤', '运动医学',
                '韧带损伤', '骨科其他']
@@ -126,6 +126,7 @@ def train(model, train_iter, val_iter, epoch):
     plt.ylabel('训练准确率')
     plt.show()
 
+
 def evaluate(model, val_iter):
     """
     模型验证函数
@@ -137,8 +138,8 @@ def evaluate(model, val_iter):
     with torch.no_grad():
         for contents, labels in val_iter:
             cat_id_out, label_out = model(contents)
-            cat_id = labels[1]
-            label = labels[0]
+            cat_id = labels[0]
+            label = labels[1]
             loss_1 = torch.nn.CrossEntropyLoss()(cat_id_out, cat_id)
             loss_2 = torch.nn.CrossEntropyLoss()(label_out, label)
             loss_total += loss_1 + loss_2
@@ -154,13 +155,14 @@ def evaluate(model, val_iter):
 
     return acc, loss_total/len(val_iter)
 
+
 # def test(model, test_iter):
 #     """
 #     模型的测试
 #     """
 #     model.load_state_dict(torch.load(model_path))
 #     model.eval()
-#     loss_total = 0
+#     # evalloss_total = 0
 #     predict_cat_all = np.array([], dtype=int)
 #     predict_label_all = np.array([], dtype=int)
 #     labels_cat_all = np.array([], dtype=int)
@@ -168,13 +170,13 @@ def evaluate(model, val_iter):
 #     with torch.no_grad():
 #         for idx, (content, labels) in enumerate(test_iter):
 #             cat_id_out, label_out = model(content)
-#             facal_loss = nn.CrossEntropyLoss()
+#             # facal_loss = nn.CrossEntropyLoss()
 #             cat_id = labels[1]
 #             label = labels[0]
-#             loss1 = facal_loss(cat_id_out, cat_id)
-#             loss2 = facal_loss(label_out, label)
-#             loss = loss1 + loss2
-#             loss_total += loss.item()
+#             # loss1 = facal_loss(cat_id_out, cat_id)
+#             # loss2 = facal_loss(label_out, label)
+#             # loss = loss1 + loss2
+#             # loss_total += loss.item()
 #             cat_id = cat_id.data.cpu().numpy()
 #             label = label.data.cpu().numpy()
 #             predict_cat_id = torch.max(cat_id_out.data, 1)[1].cpu().numpy()
@@ -185,20 +187,46 @@ def evaluate(model, val_iter):
 #             # predict_all = np.append(predict_all, predict_label)
 #             predict_cat_all = np.append(predict_cat_all, predict_cat_id)
 #             predict_label_all = np.append(predict_label_all, predict_label)
-#             labels_cat_all = np.append(labels_cat_all, cat_id)
-#             labels_label_all = np.append(labels_label_all, label)
+#             # labels_cat_all = np.append(labels_cat_all, cat_id)
+#             # labels_label_all = np.append(labels_label_all, label)
 #
-#         acc_cat = metrics.accuracy_score(predict_cat_all, labels_cat_all)
-#         acc_label = metrics.accuracy_score(predict_label_all, labels_label_all)
-#
-#         # report:精确率, 准确率, 召回率
-#         report_cat = metrics.classification_report(predict_cat_all, labels_cat_all, target_names=class_cat, digits=4)
-#         report_label = metrics.classification_report(predict_label_all, labels_label_all,
-#                                                      target_names=class_label, digits=4)
-#
-#         confusion_cat = metrics.confusion_matrix(predict_cat_all, labels_cat_all)  # 混淆矩阵
-#         confusion_label = metrics.confusion_matrix(predict_label_all, labels_label_all)
+#         # acc_cat = metrics.accuracy_score(predict_cat_all, labels_cat_all)
+#         # acc_label = metrics.accuracy_score(predict_label_all, labels_label_all)
+#         #
+#         # # report:精确率, 准确率, 召回率
+#         # report_cat = metrics.classification_report(predict_cat_all, labels_cat_all, target_names=class_cat, digits=4)
+#         # report_label = metrics.classification_report(predict_label_all, labels_label_all,
+#         #                                              target_names=class_label, digits=4)
+#         #
+#         # confusion_cat = metrics.confusion_matrix(predict_cat_all, labels_cat_all)  # 混淆矩阵
+#         # confusion_label = metrics.confusion_matrix(predict_label_all, labels_label_all)
 #     return acc_cat, acc_label, loss_total/len(test_iter), report_cat, report_label, confusion_cat, confusion_label
+
+
+def test(model, test_iter):
+    """
+    模型的测试
+    """
+    model.load_state_dict(torch.load(model_path))
+    model.eval()
+    # evalloss_total = 0
+    predict_label_i_all = np.array([], dtype=int)
+    predict_label_j_all = np.array([], dtype=int)
+    labels_i = np.array([], dtype=int)
+
+    with torch.no_grad():
+        for idx, (content, labels) in enumerate(test_iter):
+            label_i, label_j = model(content)
+
+            predict_label_i = torch.max(label_i.data, 1)[1].cpu().numpy()
+            predict_label_j = torch.max(label_j.data, 1)[1].cpu().numpy()
+
+            predict_label_i_all = np.append(predict_label_i_all, predict_label_i)
+            predict_label_j_all = np.append(predict_label_j_all, predict_label_j)
+            labels_i = np.append(labels_i, labels[0].cpu())
+        acc_label_i = metrics.accuracy_score(labels_i, predict_label_i_all)
+
+    return predict_label_i_all, predict_label_j_all, acc_label_i
 
 
 if __name__ == '__main__':
