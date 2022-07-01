@@ -160,7 +160,7 @@ Todo: 先把训练集中`label_j`列为-1的样本删除，重新训练模型，
 
 	在原来模型A的基础上，继续用“伪标签样本集”进行训练，得到最终模型B
 
-	模型B即为最后得到的模型；
+	模型B即为最终得到的模型，用它预测测试集并提交；
 
 
 思路二： **分段训练法**
@@ -239,7 +239,70 @@ F1_total:1.6621
 
 ```
 
-训练完成后，预测-1标签数据集并处理：
+训练完成后，预测-1标签数据集：
 ```
-python multi_task_model.py --task=predict --model_outpath=model_a --prefile=data/label_j.tsv
+python multi_task_model.py --task=predict --model_outpath=model_a --pred_file=data/label_j.tsv --pred_outfile=model_a/pred_label_j.csv
+```
+
+运行结果：
+```
+274/274 [==============================] - 28s 104ms/step
+提交文件已生成：model_a/pred_label_j.csv
+```
+
+合并处理预测的-1标签数据集：
+
+```
+python data_process.py --task=merge_predict --fname=data/label_j.tsv,model_a/pred_label_j.csv --outpath=data/merge
+```
+运行后会生成一个新的训练集目录：`data/merge`，目录里包含了合并后的-1标签数据作为训练集，
+以及原有的验证集和测试集；
+
+
+第三步：在原模型基础上训练合并数据集，得到模型B
+
+代码优化： 验证过程使用比赛指定的F1_final指标作为评估指标，保证模型的F1值最高；
+
+
+```
+python multi_task_model.py --task=train --epochs=30 --batch_size=48 \
+--data_path=data/merge \
+--model_outpath=model_b \
+--preload_model=model_a/model.weights \
+--pred_outfile=model_b/submit.csv
+```
+
+win下命令行：
+```
+python multi_task_model.py --task=train --epochs=30 --batch_size=48 --data_path=data/merge --model_outpath=model_b --preload_model=model_a/model.weights --pred_outfile=model_b/submit.csv
+```
+
+-----------------------------------------
+
+## 新思路：多维度融合
+
+把年龄这个特征单独拿出来，与文本得到的特征进行融合；
+
+```
+年龄 ==========>━┓
+                  ┣━》全连接层==》输出
+文本 ==>BERT ==>━┛
+```
+
+## 预训练模型思路
+
+
+将比赛提供的'spo.txt'拿来跑一个BERT-base的预训练模型：
+
+然后使用这个预训练模型来训练：
+
+```
+python multi_task_model.py --task=train \
+--bert_path=/mnt/sda1/models/bert_spo \ 
+--epochs=30 \
+--batch_size=48 \
+--data_path=data/merge \
+--model_outpath=model_b \
+--preload_model=model_a/model.weights \
+--pred_outfile=model_b/submit.csv
 ```

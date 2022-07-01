@@ -11,6 +11,11 @@ import pandas as pd
 
 pl = lambda x='-': print(x*40)
 
+# 自动生成目录
+def mkfold(new_dir):
+    if not os.path.exists(new_dir):
+        os.makedirs(new_dir)
+
 def data_trans():
     fname = 'data/data_train.xlsx'
     df = pd.read_excel(fname)
@@ -90,6 +95,45 @@ def submit_test():
     print('-'*40)
     print(sorted(dd.index))
 
+def merge_predict(fname, outpath):
+    '''合并-1标签数据与预测结果,并生成训练数据
+    '''
+    from shutil import copyfile
+    mkfold(outpath)
+
+    datname, predfname = fname.split(',')
+    df = pd.read_csv(datname, sep='\t', header=None)
+    df.columns = ['txt', 'olabel_i','olabel_j']
+    print(df.info())
+    pl()
+
+    df_pred = pd.read_csv(predfname)
+    print(df_pred.info())
+    pl()
+    
+    df_out = pd.concat([df, df_pred], axis=1)
+    df_out = df_out[['txt', 'olabel_i','label_j']]
+    df_out.columns = ['txt', 'label_i','label_j']
+    print(df_out.info())
+    pl()
+    print(df_out.head())
+    pl()
+
+    # 保存结果
+    outfile = os.path.join(outpath, 'train.tsv')
+    df_out.to_csv(outfile, index=0, header=None, sep='\t')
+    print('合并结果已保存到:%s'%outfile)
+    
+    # 把原始的测试集和验证集复制过来
+    p, f = os.path.split(datname)
+    flist = ['dev.tsv','test.tsv']
+    for fn in flist:
+        sf = os.path.join(p, fn)
+        tf = os.path.join(outpath, fn)
+        copyfile(sf, tf)                
+
+    print('训练数据已生成。')
+
 if __name__ == '__main__':
     pass
     parser = argparse.ArgumentParser(description='数据预处理')
@@ -109,4 +153,6 @@ if __name__ == '__main__':
 
     if task=='submit_test':
         submit_test()
+    if task=='merge_predict':
+        merge_predict(fname, outpath)
 
