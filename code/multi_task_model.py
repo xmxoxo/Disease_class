@@ -40,6 +40,7 @@ parser.add_argument('--pred_file', type=str, default='data/test.tsv', help='预�
 parser.add_argument('--pred_outfile', type=str, default='./models/submit.csv', help='预测输出文件')
 parser.add_argument('--preload_model', type=str, default='', help='预加载模型文件')
 parser.add_argument('--debug', type=int, default=0, help='debug')
+parser.add_argument('--frozen', type=int, default=-1, help='frozen')
 
 args = parser.parse_args()
 task = args.task
@@ -52,6 +53,7 @@ bert_path = args.bert_path
 #label_dict_file = args.label_dict
 label_dict_file = ''
 debug = args.debug
+frozen = args.frozen
 preload_model = args.preload_model
 
 maxlen = 256
@@ -176,7 +178,6 @@ def MModel(config_path, checkpoint_path, num_classes):
     #output = Lambda(lambda x: K.mean(x, axis=1), name='MEAN-token')(bert.model.output)
     output = Lambda(lambda x: x[:, 0], name='CLS-token')(bert.model.output)
 
-    '''
     out = []
     for i,num in enumerate(num_classes):
         tmp = Dense(units=num, activation='softmax', name='out_%d'%i)(output)
@@ -185,6 +186,7 @@ def MModel(config_path, checkpoint_path, num_classes):
     out_0 = Dense(units=num_classes[0], activation='softmax', name='out_0')(output)
     out_1 = Dense(units=num_classes[1], activation='softmax', name='out_1')(output)
     out = [out_0, out_1]
+    '''
 
     # out = Concatenate(axis=1)(out)
     model = Model(bert.model.input, out, name="MModel")
@@ -195,15 +197,19 @@ print('正在创建模型...')
 num_classes = [20, 61]
 model = MModel(config_path, checkpoint_path, num_classes)
 # model.summary()
+print('model input:', model.input)
 print('model output:', model.output)
-#sys.exit()
 
 '''
-if frozen == 1:
-    # 冻住指定的out_1层 禁止训练
-    layer_out_1 = model.get_layer('out_1')
-    layer_out_1.trainable = False
+指定冻结层的索引号 -1 表示不冻结, 0,1表示冻
 '''
+if frozen >= 0:
+    layer_name = ['out_0', 'out_1'][frozen] 
+    # 冻住指定层 禁止训练
+    layer_out_1 = model.get_layer(layer_name)
+    layer_out_1.trainable = False
+
+# sys.exit()
 
 # 派生为带分段线性学习率的优化器。
 # 其中name参数可选，但最好填入，以区分不同的派生优化器。

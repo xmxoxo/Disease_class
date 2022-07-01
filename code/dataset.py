@@ -6,7 +6,12 @@ import os
 import pickle as pkl
 import pandas as pd
 
+
+# Ô¤ÑµÁ·Ä£ÐÍÄ¿Â¼
 bert_path = 'roberta_pretrain'
+bert_path = '/mnt/sda1/models/roberta-base_pytorch'
+bert_path = '/mnt/sda1/models/chinese_wwm_pytorch'
+
 data_path = 'data/data_train.csv'
 dataset_pkl = 'data/dataset.pkl'
 tokenizer = BertTokenizer.from_pretrained(bert_path)

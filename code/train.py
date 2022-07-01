@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+#coding:utf-8
+
 import numpy as np
 import torch
 from sklearn import metrics
@@ -9,6 +12,9 @@ import time
 import pickle as pkl
 # from pytorch_pretrained.optimization import BertAdam
 from torch.optim import Adam
+
+from dataset import *
+
 
 plt.rcParams['font.family'] = 'SimHei'
 model_path = 'roberta_lstm/roberta_multi.ckpt'
@@ -197,15 +203,19 @@ def evaluate(model, val_iter):
 
 if __name__ == '__main__':
     from model import Model
-    from dataset import get_loader
-    from dataset import Data
-    from dataset import collate_fn
+    #from dataset import get_loader
+    #from dataset import Data
+    #from dataset import collate_fn
 
     train_loader, dev_loader = get_loader()
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    #device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    roberta_path = 'roberta_pretrain'
-    model = Model(roberta_path).to(device)
+    #roberta_path = 'roberta_pretrain'
+    print('bert_path:', bert_path)
+    #roberta_path = '/mnt/sda1/models/roberta-base_pytorch'
+    #roberta_path = '/mnt/sda1/models/chinese_wwm_pytorch'
+
+    model = Model(bert_path).to(device)
     train(model, train_loader, dev_loader, 5)
     # acc_cat, acc_label, loss, report_cat, report_label, confusion_cat, confusion_label = test(model, test_loader)
     # print('acc_cat:', acc_cat)
