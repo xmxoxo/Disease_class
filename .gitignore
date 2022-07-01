@@ -18,3 +18,16 @@ code/data/data_train.csv
 code/data/data_train.xlsx
 code/data/label_j.tsv
 code/data/data_train.csv
+code/model_a/model_fit.log
+code/model_a/model.weights
+code/model_a/pred_label_j.csv
+code/model_a/result_loss.png
+code/model_a/result_out_0_acc.png
+code/model_a/result_out_0_loss.png
+code/model_a/result_out_1_acc.png
+code/model_a/result_out_1_loss.png
+code/model_a/submit.csv
+.gitignore
+code/data/merge/dev.tsv
+code/data/merge/test.tsv
+code/data/merge/train.tsv
