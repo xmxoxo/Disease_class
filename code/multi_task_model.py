@@ -17,11 +17,8 @@ import pandas as pd
 from bert4keras.backend import keras, set_gelu, K
 from bert4keras.models import build_transformer_model
 from bert4keras.tokenizers import Tokenizer
-#from bert4keras.tokenizers import SpTokenizer
 from bert4keras.optimizers import Adam, extend_with_piecewise_linear_lr
 from bert4keras.snippets import sequence_padding, DataGenerator, to_array
-#from bert4keras.snippets import open, ViterbiDecoder, to_array
-#from bert4keras.layers import ConditionalRandomField
 from keras.layers import Dropout, merge, Input, Lambda
 from keras.layers import Lambda, Dense, Bidirectional, LSTM, Concatenate
 from keras.utils.np_utils import to_categorical
@@ -36,11 +33,12 @@ parser.add_argument('--batch_size', type=int, default=32, help='batch_size=32')
 parser.add_argument('--epochs', type=int, default=10, help='epochs=10')
 parser.add_argument('--lr', type=float, default=1e-5, help='learning_rate')
 #parser.add_argument('--label_dict', type=str, default='', help='分类字典')
-parser.add_argument('--pred_file', type=str, default='data/test.tsv', help='预测文件')
-parser.add_argument('--pred_outfile', type=str, default='./models/submit.csv', help='预测输出文件')
+parser.add_argument('--pred_file', type=str, default='', help='预测文件')
+parser.add_argument('--pred_outfile', type=str, default='', help='预测输出文件')
 parser.add_argument('--preload_model', type=str, default='', help='预加载模型文件')
-parser.add_argument('--debug', type=int, default=0, help='debug')
+parser.add_argument('--pred_detail', type=int, default=0, help='pred_detail')
 parser.add_argument('--frozen', type=int, default=-1, help='frozen')
+parser.add_argument('--debug', type=int, default=0, help='debug')
 
 args = parser.parse_args()
 task = args.task
@@ -123,7 +121,7 @@ def load_data(filename):
                 label = np.concatenate((Y0, Y1), axis=0).tolist()
                 '''
                 D.append((text, label))
-    return D#[:100]
+    return D#[:16]
 
 
 def load_all_data(path):
@@ -208,6 +206,7 @@ if frozen >= 0:
     # 冻住指定层 禁止训练
     layer_out_1 = model.get_layer(layer_name)
     layer_out_1.trainable = False
+    print('冻结层:%s'% layer_name) 
 
 # sys.exit()
 
@@ -311,7 +310,7 @@ class Evaluator(keras.callbacks.Callback):
         print(u'val_F1: %.5f, best_val_F1: %.5f\n' %(val_score, self.best_val_score))
 
 # 预测测试集并保存
-def predict_test(model, pred_file, outfile):
+def predict_test(model, pred_file, outfile, pred_detail):
 
     # 自动生成输出文件名
     if outfile == "":
@@ -328,8 +327,25 @@ def predict_test(model, pred_file, outfile):
     pred = model.predict_generator(pred_generator.forfit(random=False), steps=len(pred_generator), verbose=1)
 
     y_pred = [pred[0].argmax(axis=1), pred[1].argmax(axis=1)]
+    #print('pred[0]:', pred[0].shape, type(pred[0]))
+    #print('y_pred[0]:', y_pred[0])
+
+
+    # 是否输出概率：pred_detail
+    if pred_detail==1:
+        ll = np.arange(pred[0].shape[0]) 
+        y_prob = [pred[0][ll, y_pred[0]], pred[1][ll, y_pred[1]]]
+        #print('y_prob[0]:', y_prob[0])
+        #sys.exit()
+
+        df = pd.DataFrame({"id": range(len(y_pred[0])), 
+                        "label_i":y_pred[0], "label_j":y_pred[1],
+                        "prob_i":y_prob[0], "prob_j":y_prob[1],
+                        })
+    else:
+        df = pd.DataFrame({"id": range(len(y_pred[0])), "label_i":y_pred[0], "label_j":y_pred[1]})
+    
     # 保存预测的提交结果
-    df = pd.DataFrame({"id": range(len(y_pred[0])), "label_i":y_pred[0], "label_j":y_pred[1]})
     df.to_csv(outfile, index=0)
     print('提交文件已生成：%s'%outfile)
 
@@ -491,8 +507,15 @@ if __name__ == '__main__':
         # 加载待预测数据
         pred_file = args.pred_file
         pred_outfile = args.pred_outfile
+        pred_detail = args.pred_detail
+        # 默认的数据
+        if pred_file == '':
+            pred_file = os.path.join(data_path, 'test.tsv')
+        if pred_outfile == '':
+            pred_outfile = os.path.join(model_outpath, 'submit.csv')
+
         if pred_file != '' and pred_outfile != '':
-            predict_test(model, pred_file, pred_outfile)
+            predict_test(model, pred_file, pred_outfile, pred_detail)
 
     if task in ['train', 'eval']:
         y_true = np.array([b for a,b in valid_data])

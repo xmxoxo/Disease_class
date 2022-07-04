@@ -175,20 +175,35 @@ def merge_predict(fname, outpath):
     datname, predfname = fname.split(',')
     df = pd.read_csv(datname, sep='\t', header=None)
     df.columns = ['txt', 'olabel_i','olabel_j']
+    df = df[['txt', 'olabel_i']]
     print(df.info())
     pl()
 
+    # 读取预测结果
     df_pred = pd.read_csv(predfname)
     print(df_pred.info())
     pl()
+    # 删除列
+    df_pred.drop(['label_i', 'prob_i'], axis=1)
     
+    # 连接两个表
     df_out = pd.concat([df, df_pred], axis=1)
+    # 过滤预测置信度
+    prob_low = df_out[df_out['prob_j'] < 0.5]
+    df_out = df_out.drop(index=prob_low.index)
+
+    # 提取最终结果列
     df_out = df_out[['txt', 'olabel_i','label_j']]
     df_out.columns = ['txt', 'label_i','label_j']
+
+    # todo: 与原始训练集合并
+    pass
+
     print(df_out.info())
     pl()
     print(df_out.head())
     pl()
+
 
     # 保存结果
     outfile = os.path.join(outpath, 'train.tsv')

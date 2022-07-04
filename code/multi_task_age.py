@@ -37,8 +37,8 @@ parser.add_argument('--bert_path', type=str, default='', help='bert_path')
 parser.add_argument('--batch_size', type=int, default=32, help='batch_size=32')
 parser.add_argument('--epochs', type=int, default=10, help='epochs=10')
 parser.add_argument('--lr', type=float, default=1e-5, help='learning_rate')
-parser.add_argument('--pred_file', type=str, default='data_age/test.tsv', help='预测文件')
-parser.add_argument('--pred_outfile', type=str, default='./model_age/submit.csv', help='预测输出文件')
+parser.add_argument('--pred_file', type=str, default='', help='预测文件')
+parser.add_argument('--pred_outfile', type=str, default='', help='预测输出文件')
 parser.add_argument('--preload_model', type=str, default='', help='预加载模型文件')
 parser.add_argument('--debug', type=int, default=0, help='debug')
 parser.add_argument('--frozen', type=int, default=-1, help='frozen')
@@ -144,12 +144,13 @@ class data_generator(DataGenerator):
             batch_labels.append(label)
             
             if len(batch_token_ids) == self.batch_size or is_end:
+                batch_ages = np.array(batch_ages)
                 batch_token_ids = sequence_padding(batch_token_ids)
                 batch_segment_ids = sequence_padding(batch_segment_ids)
                 batch_labels = sequence_padding(batch_labels)
                 
                 batch_labels = [batch_labels[:,0], batch_labels[:,1]]
-                yield batch_ages, [batch_token_ids, batch_segment_ids], batch_labels 
+                yield [batch_ages, batch_token_ids, batch_segment_ids], batch_labels 
                 batch_ages, batch_token_ids, batch_segment_ids, batch_labels = [], [], [], []
 
 # 创建基础模型
@@ -175,7 +176,7 @@ def MModel(config_path, checkpoint_path, num_classes):
     output = model_base([X1, X2])
     
     # 降维
-    output = Dense(units=256, name='Layer_dense')(output)
+    #output = Dense(units=256, name='Layer_dense')(output)
 
     # 年龄特征
     age = Input(shape=(1,), name='AGE-Token')
@@ -205,9 +206,9 @@ print('model output:', model.output)
 if frozen >= 0:
     layer_name = ['out_0', 'out_1'][frozen] 
     # 冻住指定层 禁止训练
-    layer_out_1 = model.get_layer(layer_name)
-    layer_out_1.trainable = False
-
+    layer_out = model.get_layer(layer_name)
+    layer_out.trainable = False
+    print('冻结层:%s'% layer_name) 
 #sys.exit()
 
 # 派生为带分段线性学习率的优化器。
@@ -223,6 +224,7 @@ model.compile(
     
     #sparse_categorical_crossentropy binary_crossentropy categorical_crossentropy
     #optimizer=Adam(learning_rate),  # 用足够小的学习率
+    
     optimizer=AdamLR(learning_rate=learning_rate, lr_schedule={
         1000: 1,
         2000: 0.1
@@ -240,8 +242,9 @@ test_generator = data_generator(test_data, batch_size)
 
 '''
 print('batch_size:', batch_size)
-for txt, label in train_generator.forfit():
-    print('label.shape:', label.shape)
+for dat, label in train_generator:
+    print('label.shape:', label[0].shape)
+    print(dat)
     print(label)
     break;
 sys.exit()
@@ -276,8 +279,7 @@ def evaluate(data):
     else:
         ret = right / total
     '''
-
-    y_true = np.array([b for a,b in data])
+    y_true = np.array([x[2] for x in data])
 
     t_generator = data_generator(data, batch_size)
     pred = model.predict_generator(t_generator.forfit(random=False), 
@@ -490,11 +492,17 @@ if __name__ == '__main__':
         # 加载待预测数据
         pred_file = args.pred_file
         pred_outfile = args.pred_outfile
+        # 默认的数据
+        if pred_file == '':
+            pred_file = os.path.join(data_path, 'test.tsv')
+        if pred_outfile == '':
+            pred_outfile = os.path.join(model_outpath, 'submit.csv')
+        
         if pred_file != '' and pred_outfile != '':
             predict_test(model, pred_file, pred_outfile)
 
     if task in ['train', 'eval']:
-        y_true = np.array([b for a,b in valid_data])
+        y_true = np.array([x[2] for x in valid_data])
 
         # 加载验证集
         if 1 or len(test_data) == 0:

@@ -238,8 +238,9 @@ Accuracy:0.88 Recall:0.88 F1-macro:0.88
 ----------------Task: 1-----------------
 Accuracy:0.79 Recall:0.79 F1-micro:0.79
 F1_total:1.6621
-
 ```
+
+线上得分：1.64699
 
 训练完成后，预测-1标签数据集：
 ```
@@ -322,8 +323,8 @@ Accuracy:0.88 Recall:0.88 F1-macro:0.88
 ----------------Task: 1-----------------
 Accuracy:0.78 Recall:0.78 F1-micro:0.78
 F1_total:1.6607
-
 ```
+
 
 线上提交结果： 1.64455 
 训练过程出现过拟合，验证集得分越来越低，线上提交得分也比原来的低。
@@ -349,6 +350,26 @@ F1_total:1.6607
 	训练时冻结模型label_i模型层，即只训练label_j全连接层，得到最终模型B
 
 	模型B即为最终得到的模型，用它预测测试集并提交；
+
+
+思路四：**伪标签法改进2**
+
+ 第一步：
+
+	使用训练好的模型A对“-1样本集”进行预测，模型预测了label_i和label_j，
+	把预测出来的 label_i 丢弃掉，用原始的label_i值替换，
+	并过滤 出label_j的预测结果中，置信度高于阈值的样本 得到“伪标签数据集”
+	数据集中包含：文本，label_i, label_j
+	
+	这里阈值可以取0.5
+
+* 第二步：
+
+	将“伪标签样本集”和原始的完整数据集合并，得到“伪标签训练数据集”，
+	用这个数据集重新训练一个模型B
+
+	模型B即为最终得到的模型，用它预测测试集并提交；
+
 
 以上步骤可以重复迭代：把模型B当作模型A继续迭代, 直到模型得分不再提升；
 
@@ -388,6 +409,8 @@ python multi_task_model.py --task=train \
 --batch_size=12 \
 --lr=1e-5 \
 --model_outpath=model_a_wwm
+--pred_file=data/test.tsv
+--pred_outfile=model_a_wwm/submit.csv 
 ```
 
 模型大小满足条件：小于4e8
@@ -397,24 +420,173 @@ Total params: 324,555,857
 Trainable params: 324,555,857
 ```
 
+模型预测:
+```
+python multi_task_model.py --task=predict \
+--bert_path=/mnt/sda1/models/chinese_roberta_wwm_large_ext_L-24_H-1024_A-16 \
+--epochs=1 \
+--batch_size=12 \
+--lr=1e-5 \
+--model_outpath=model_a_wwm \
+--pred_file=data/test.tsv \
+--pred_outfile=model_a_wwm/submit.csv
+```
+
+线上得分： 1.67211
+
+
+
 
 训练模型B：
 ```
 python multi_task_model.py --task=train \
 --bert_path=/mnt/sda1/models/chinese_roberta_wwm_large_ext_L-24_H-1024_A-16 \
---epochs=30 \
---batch_size=48 \
+--epochs=3 \
+--batch_size=12 \
 --data_path=data/merge \
 --model_outpath=model_b_wwm \
 --preload_model=model_a_wwm/model.weights \
+--pred_file=data/test.tsv \
 --pred_outfile=model_b_wwm/submit.csv \
 --frozen=1
 ```
 
+
+训练结果：
+```
+Epoch 1/3
+2022-07-01 15:46:29.102839: I tensorflow/stream_executor/platform/default/dso_loader.cc:49] Successfully opened dynamic library libcublas.so.11
+729/729 [==============================] - 282s 387ms/step - loss: 0.9174 - out_0_loss: 0.3440 - out_1_loss: 0.5734 - out_0_acc: 0.8952 - out_1_acc: 0.8063
+model score: [(0.8601769911504424, 0.8601769911504424, 0.8489220866067131), (0.7911504424778761, 0.7911504424778761, 0.7911504424778761)] F1_final:1.6401
+val_F1: 1.64007, best_val_F1: 1.64007
+
+Epoch 2/3
+729/729 [==============================] - 266s 364ms/step - loss: 0.6221 - out_0_loss: 0.1877 - out_1_loss: 0.4344 - out_0_acc: 0.9367 - out_1_acc: 0.8440
+model score: [(0.8460176991150442, 0.8460176991150442, 0.8291330688824334), (0.7706194690265487, 0.7706194690265487, 0.7706194690265487)] F1_final:1.5998
+val_F1: 1.59975, best_val_F1: 1.64007
+
+Epoch 3/3
+729/729 [==============================] - 267s 366ms/step - loss: 0.3195 - out_0_loss: 0.0999 - out_1_loss: 0.2196 - out_0_acc: 0.9671 - out_1_acc: 0.9259
+model score: [(0.8424778761061947, 0.8424778761061947, 0.8229006291297555), (0.7897345132743363, 0.7897345132743363, 0.7897345132743363)] F1_final:1.6126
+val_F1: 1.61264, best_val_F1: 1.64007
+
+正在保存训练数据...
+训练曲线图已保存。
+正在预测测试集数据...
+pred_data: 7596
+633/633 [==============================] - 62s 97ms/step
+提交文件已生成：model_b_wwm/submit.csv
+正在加载模型...
+正在验证数据集...
+236/236 [==============================] - 22s 95ms/step
+----------------Task: 0-----------------
+Accuracy:0.86 Recall:0.86 F1-macro:0.85
+----------------Task: 1-----------------
+Accuracy:0.79 Recall:0.79 F1-micro:0.79
+F1_total:1.6401
+```
+
+验证集效果并不理想, 未线上提交。
+
+
+### 新的实验
+
+
+重新训练一个大模型A：
+
+```
+python multi_task_model.py --task=train \
+--bert_path=/mnt/sda1/models/chinese_roberta_wwm_large_ext_L-24_H-1024_A-16 \
+--epochs=30 \
+--batch_size=12 \
+--lr=1e-5 \
+--data_path=data \
+--model_outpath=model_a_wwm_1
+--pred_file=data/test.tsv
+--pred_outfile=model_a_wwm_1/submit.csv 
+```
+
+训练结果：
+
+```
+Epoch 28/30
+942/942 [==============================] - 348s 369ms/step - loss: 0.0129 - out_0_loss: 0.0029 - out_1_loss: 0.0100 - out_0_acc: 0.9996 - out_1_acc: 0.9978
+model score: [(0.8838938053097345, 0.8838938053097345, 0.8773087404213277), (0.7741592920353982, 0.7741592920353982, 0.7741592920353982)] F1_final:1.6515
+val_F1: 1.65147, best_val_F1: 1.68861
+
+Epoch 29/30
+942/942 [==============================] - 347s 368ms/step - loss: 0.0135 - out_0_loss: 0.0040 - out_1_loss: 0.0095 - out_0_acc: 0.9992 - out_1_acc: 0.9980
+model score: [(0.8838938053097345, 0.8838938053097345, 0.878435672923192), (0.7826548672566371, 0.7826548672566371, 0.7826548672566372)] F1_final:1.6611
+val_F1: 1.66109, best_val_F1: 1.68861
+
+Epoch 30/30
+942/942 [==============================] - 348s 369ms/step - loss: 0.0084 - out_0_loss: 0.0019 - out_1_loss: 0.0065 - out_0_acc: 0.9999 - out_1_acc: 0.9985
+model score: [(0.8849557522123894, 0.8849557522123894, 0.8796367767434765), (0.7766371681415929, 0.7766371681415929, 0.7766371681415929)] F1_final:1.6563
+val_F1: 1.65627, best_val_F1: 1.68861
+
+正在保存训练数据...
+训练曲线图已保存。
+正在预测测试集数据...
+pred_data: 7596
+633/633 [==============================] - 64s 101ms/step
+提交文件已生成：./models/submit.csv
+正在加载模型...
+正在验证数据集...
+236/236 [==============================] - 23s 99ms/step
+----------------Task: 0-----------------
+Accuracy:0.89 Recall:0.89 F1-macro:0.89
+----------------Task: 1-----------------
+Accuracy:0.80 Recall:0.80 F1-micro:0.80
+F1_total:1.6886
+
+```
+
+模型A预测label_j，使用参数：`pred_detail=1`控制输出预测概率：
+```
+python multi_task_model.py --task=predict \
+--bert_path=/mnt/sda1/models/chinese_roberta_wwm_large_ext_L-24_H-1024_A-16 \
+--batch_size=12 \
+--data_path=data/merge \
+--model_outpath=model_a_wwm_1 \
+--pred_file=data/label_j.tsv \
+--pred_outfile=model_a_wwm_1/pred_label_j.csv \
+--pred_detail=1
+```
+
+预测结果：
+```
+729/729 [==============================] - 73s 101ms/step
+提交文件已生成：model_a_wwm_1/pred_label_j.csv
+```
+
+伪标签数据处理：
+```
+python data_process.py --task=merge_predict --fname=data/label_j.tsv,model_a_wwm_1/pred_label_j.csv --outpath=data/merge_wwm_1
+
+合并结果已保存到:data/merge_wwm_1\train.tsv
+```
+
+训练模型B，使用新数据继续训练5轮：
+
+```
+python multi_task_model.py --task=train \
+--bert_path=/mnt/sda1/models/chinese_roberta_wwm_large_ext_L-24_H-1024_A-16 \
+--epochs=5 \
+--batch_size=12 \
+--lr=1e-5 \
+--data_path=data/merge_wwm_1 \
+--preload_model=model_a_wwm_1/model.weights \
+--model_outpath=model_b_wwm_1
+```
+
+
+
+
 ## 预训练模型思路
 
 
-将比赛提供的'spo.txt'拿来跑一个BERT-base的预训练模型：
+将比赛提供的'spo.txt'拿来跑一个BERT-base的预训练模型; 
+预训练模型： `bert_spo`目录下，注意模型只保存了权重，要使用model.load_weight(xx)来加载
 
 然后使用这个预训练模型来训练：
 
@@ -433,7 +605,7 @@ python multi_task_model.py --task=train \
 ```
 python multi_task_model.py --task=train \
 --bert_path=/mnt/sda1/models/bert_spo \ 
---epochs=30 \
+--epochs=5 \
 --batch_size=48 \
 --data_path=data/merge \
 --model_outpath=model_b_spo \
@@ -453,9 +625,18 @@ python multi_task_model.py --task=train \
 ```
 伪标签学习（半监督）的几种常用策略：
 
-一、基于标注数据训练模型Model1 ——>基于Model1预测无标注数据 ——> 根据无标注数据的预测概率区分高置信度样本 ——> 筛选高置信样本（伪标签数据）加入标注数据 ——> 训练出新模型Model2。
+一、基于标注数据训练模型Model1 
+——>基于Model1预测无标注数据 
+——> 根据无标注数据的预测概率区分高置信度样本 
+——> 筛选高置信样本（伪标签数据）加入标注数据 
+——> 训练出新模型Model2。
 
-二、基于标注数据训练模型Model1 ——>基于Model1预测无标注数据 ——> 根据无标注数据的预测概率区分高置信度样本 ——> 筛选高置信样本（伪标签数据）加入标注数据 ——> 训练新模型Model2 ——> 用Model2替换Model1重复上述步骤，直至模型效果不再提升。
+二、
+基于标注数据训练模型Model1 ——>基于Model1预测无标注数据 
+——> 根据无标注数据的预测概率区分高置信度样本 
+——> 筛选高置信样本（伪标签数据）加入标注数据 
+——> 训练新模型Model2 
+——> 用Model2替换Model1重复上述步骤，直至模型效果不再提升。
 
 三、可以将标注数据和伪标签数据的损失分配不同的权重。
 
