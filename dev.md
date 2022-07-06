@@ -538,10 +538,12 @@ Accuracy:0.89 Recall:0.89 F1-macro:0.89
 ----------------Task: 1-----------------
 Accuracy:0.80 Recall:0.80 F1-micro:0.80
 F1_total:1.6886
-
 ```
+线上提交得分：1.67085
 
-模型A预测label_j，使用参数：`pred_detail=1`控制输出预测概率：
+
+
+#### 模型A预测label_j，使用参数：`pred_detail=1`控制输出预测概率：
 ```
 python multi_task_model.py --task=predict \
 --bert_path=/mnt/sda1/models/chinese_roberta_wwm_large_ext_L-24_H-1024_A-16 \
@@ -564,9 +566,10 @@ python multi_task_model.py --task=predict \
 python data_process.py --task=merge_predict --fname=data/label_j.tsv,model_a_wwm_1/pred_label_j.csv --outpath=data/merge_wwm_1
 
 合并结果已保存到:data/merge_wwm_1\train.tsv
+总记录数： 8141
 ```
 
-训练模型B，使用新数据继续训练5轮：
+####训练模型B，使用新数据继续训练5轮：
 
 ```
 python multi_task_model.py --task=train \
@@ -579,8 +582,63 @@ python multi_task_model.py --task=train \
 --model_outpath=model_b_wwm_1
 ```
 
+训练结果：
+```
+正在预测测试集数据...
+pred_data: 7596
+633/633 [==============================] - 69s 108ms/step
+提交文件已生成：model_b_wwm_1/submit.csv
+正在加载模型...
+正在验证数据集...
+236/236 [==============================] - 25s 106ms/step
+----------------Task: 0-----------------
+Accuracy:0.84 Recall:0.84 F1-macro:0.82
+----------------Task: 1-----------------
+Accuracy:0.77 Recall:0.77 F1-micro:0.77
+F1_total:1.5917
+
+```
+
+训练效果变差：验证集得分：1.5917， 线上未提交；
 
 
+#### 训练模型B，使用合并的数据重新训练30轮
+
+把原始数据`data/data/train.tsv` 合并到 `data/merge_wwm_1/train.tsv` 数据后面；
+数据集存放到：`data\merge_wwm_1_full`
+
+```
+python multi_task_model.py --task=train \
+--bert_path=/mnt/sda1/models/chinese_roberta_wwm_large_ext_L-24_H-1024_A-16 \
+--epochs=30 \
+--batch_size=12 \
+--lr=1e-5 \
+--data_path=data/merge_wwm_1_full \
+--model_outpath=model_b_wwm_1_full
+```
+
+训练结果：
+
+```
+正在保存训练数据...
+训练曲线图已保存。
+正在预测测试集数据...
+pred_data: 7596
+633/633 [==============================] - 61s 97ms/step
+提交文件已生成：model_b_wwm_1_full/submit.csv
+正在加载模型...
+正在验证数据集...
+236/236 [==============================] - 22s 94ms/step
+----------------Task: 0-----------------
+Accuracy:0.89 Recall:0.89 F1-macro:0.88
+----------------Task: 1-----------------
+Accuracy:0.79 Recall:0.79 F1-micro:0.79
+F1_total:1.6682
+```
+线上得分： 1.66638
+
+
+-----------------------------------------
 
 ## 预训练模型思路
 
@@ -600,20 +658,225 @@ python multi_task_model.py --task=train \
 --model_outpath=model_a_spo
 ```
 
+-----------------------------------------
 
-训练模型B：
+##  pipe任务独立思路 
+
+把两个任务分开，使用单独的模型分别进行训练；
+
+数据处理：
+
+```
+python data_process.py --task=data_trans_pipe --outpath=data/data_pipe
+```
+训练数据分别保存到：`data\data_pipe\label_i`和 `data\data_pipe\label_j`
+
+训练模型label_i：
+```
+python train_class.py --task=train \
+--data_path=data/data_pipe/label_i \
+--model_outpath=model_pipe_0/label_i \
+--epochs=30 \
+--batch_size=48 \
+--idx=0
+```
+
+数据预测
+```
+python train_class.py --task=predict \
+--data_path=data/data_pipe/label_i \
+--model_outpath=model_pipe_0/label_i \
+--batch_size=48 \
+--idx=0
+```
+
+```
+159/159 [==============================] - 25s 158ms/step
+预测结果已保存:model_pipe_0/label_i/submit.csv
+```
+
+数据验证
+```
+python train_class.py --task=eval \
+--data_path=data/data_pipe/label_i \
+--model_outpath=model_pipe_0/label_i \
+--batch_size=48 \
+--idx=0
+```
+线上得分： Accuracy:0.90 Recall:0.90 F1-macro:0.89
+
+命令错误又跑了一遍：
+
+训练结果：
+
+```
+Epoch 30/30
+429/429 [==============================] - 195s 454ms/step - loss: 0.0258 - accuracy: 0.9936
+val_acc: 0.88719, best_val_acc: 0.90293
+
+正在保存训练数据...
+训练曲线图已保存。
+正在预测数据...
+pred_data: 7596
+159/159 [==============================] - 23s 147ms/step
+预测结果已保存:model_pipe_0/label_i/submit.csv
+正在加载模型...
+正在验证数据集...
+48/48 [==============================] - 7s 148ms/step
+预测数据用时7110.984毫秒.
+Accuracy:0.90 Recall:0.90 F1-micro:0.90
+```
+
+
+
+#### 训练模型label_j
+
+训练模型命令：
+```
+python train_class.py --task=train \
+--data_path=data/data_pipe/label_j \
+--model_outpath=model_pipe_0/label_j \
+--epochs=30 \
+--batch_size=48 \
+--idx=1
+```
+
+训练结果：
+```
+Epoch 30/30
+265/265 [==============================] - 121s 458ms/step - loss: 0.1330 - accuracy: 0.9633
+val_acc: 0.77778, best_val_acc: 0.77849
+
+正在保存训练数据...
+训练曲线图已保存。
+正在预测数据...
+pred_data: 7596
+159/159 [==============================] - 24s 150ms/step
+预测结果已保存:model_pipe_0/label_j/submit.csv
+正在加载模型...
+正在验证数据集...
+30/30 [==============================] - 5s 153ms/step
+预测数据用时4581.246毫秒.
+Accuracy:0.78 Recall:0.78 F1-micro:0.78
+```
+
+把两个结果串起来:
+```
+python data_process.py --task=merge_pipe --fname=model_pipe_0
+```
+
+预测结果文件已合并保存至:model_pipe_0\submit.csv
+
+线上提交结果： 1.66157
+
+### 使用大模型的pipe
+
+训练模型label_i：
+```
+python train_class.py --task=train \
+--bert_path=/mnt/sda1/models/chinese_roberta_wwm_large_ext_L-24_H-1024_A-16 \
+--data_path=data/data_pipe/label_i \
+--model_outpath=model_pipe_wwm/label_i \
+--epochs=30 \
+--batch_size=12 \
+--idx=0
+```
+
+训练结果：
+```
+Epoch 30/30
+1716/1716 [==============================] - 633s 369ms/step - loss: 0.0028 - accuracy: 0.9992
+val_acc: 0.90512, best_val_acc: 0.91124
+
+正在保存训练数据...
+训练曲线图已保存。
+正在预测数据...
+pred_data: 7596
+633/633 [==============================] - 70s 110ms/step
+预测结果已保存:model_pipe_wwm/label_i/submit.csv
+正在加载模型...
+正在验证数据集...
+191/191 [==============================] - 21s 111ms/step
+预测数据用时21214.324毫秒.
+Accuracy:0.9112 Recall:0.9112 F1-macro:0.9082
+
+```
+
+
+#### 训练模型label_j
+
+训练模型命令：
+```
+python train_class.py --task=train \
+--bert_path=/mnt/sda1/models/chinese_roberta_wwm_large_ext_L-24_H-1024_A-16 \
+--data_path=data/data_pipe/label_j \
+--model_outpath=model_pipe_wwm/label_j \
+--epochs=30 \
+--batch_size=12 \
+--idx=1
+```
+训练结果：
+
+```
+Epoch 29/30
+1060/1060 [==============================] - 397s 374ms/step - loss: 0.0063 - accuracy: 0.9988
+val_acc: 0.78627, best_val_acc: 0.80609
+
+Epoch 30/30
+1060/1060 [==============================] - 396s 374ms/step - loss: 0.0054 - accuracy: 0.9991
+val_acc: 0.79193, best_val_acc: 0.80609
+
+正在保存训练数据...
+训练曲线图已保存。
+正在预测数据...
+pred_data: 7596
+633/633 [==============================] - 64s 101ms/step
+预测结果已保存:model_pipe_wwm/label_j/submit.csv
+正在加载模型...
+正在验证数据集...
+118/118 [==============================] - 12s 102ms/step
+预测数据用时12088.152毫秒.
+Accuracy:0.8061 Recall:0.8061 F1-micro:0.8061
+```
+
+合并结果：
+```
+python data_process.py --task=merge_pipe --fname=model_pipe_wwm
+```
+预测结果文件已合并保存至:model_pipe_wwm\submit.csv
+
+线上得分： 1.66834
+
+
+-----------------------------------------
+
+## 串接数据模型
+
+模型结构不变，将输入的字段用 [SEP] 来串接；
+
+```
+python data_process.py --task=data_trans_split --outpath=data/data_split
+```
+训练数据目录：`data/data_split`
+
+模型增加对抗训练；
+
 ```
 python multi_task_model.py --task=train \
---bert_path=/mnt/sda1/models/bert_spo \ 
---epochs=5 \
---batch_size=48 \
---data_path=data/merge \
---model_outpath=model_b_spo \
---preload_model=model_a_spo/model.weights \
---pred_outfile=model_b_spo/submit.csv
+--bert_path=/mnt/sda1/models/chinese_roberta_wwm_large_ext_L-24_H-1024_A-16 \
+--epochs=30 \
+--batch_size=12 \
+--lr=1e-5 \
+--data_path=data/data_split \
+--model_outpath=model_split_wwm \
+--splited=1 \
+--adv=1 
 ```
 
-
+win下模拟训练:
+```
+python multi_task_model.py --task=train --epochs=1 --batch_size=16 --lr=1e-5 --data_path=data/data_split --model_outpath=model_split_wwm --splited=1 --adv=1 
+```
 
 -----------------------------------------
 
@@ -645,3 +908,5 @@ python multi_task_model.py --task=train \
 
 以文本分类为例，计算测试集中数据与训练集中数据的语义相似度（比如weord2vec，或者更抽象的语义编码表示），将相应高相似度的训练集数据标签，赋给测试集数据。
 ```
+
+

@@ -3,11 +3,6 @@
 
 __author__ = 'xmxoxo<xmxoxo@qq.com>'
 
-'''
-年龄+文本 融合模型
-'''
-
-
 import argparse
 import os
 import sys
@@ -23,25 +18,25 @@ from bert4keras.backend import keras, set_gelu, K
 from bert4keras.models import build_transformer_model
 from bert4keras.tokenizers import Tokenizer
 from bert4keras.optimizers import Adam, extend_with_piecewise_linear_lr
-from bert4keras.snippets import sequence_padding, DataGenerator, to_array
+from bert4keras.snippets import sequence_padding, DataGenerator
 from keras.layers import Dropout, merge, Input, Lambda
-from keras.layers import Lambda, Dense, Bidirectional, LSTM, Concatenate
-from keras.utils.np_utils import to_categorical
+from keras.layers import Lambda, Dense, Bidirectional, LSTM, SpatialDropout1D
 from keras.models import Model,load_model
 
-parser = argparse.ArgumentParser(description='单文本多任务分类模型')
+parser = argparse.ArgumentParser(description='单句子分类模型')
 parser.add_argument('--task', type=str, default="train", help='train,eval,predict,online')
-parser.add_argument('--data_path', type=str, default="./data_age/", help='data path')
-parser.add_argument('--model_outpath', type=str, default="./model_age", help='model outpath')
+parser.add_argument('--data_path', type=str, default="./data/", help='data path')
+parser.add_argument('--model_outpath', type=str, default="./output/", help='model outpath')
 parser.add_argument('--bert_path', type=str, default='', help='bert_path')
 parser.add_argument('--batch_size', type=int, default=32, help='batch_size=32')
 parser.add_argument('--epochs', type=int, default=10, help='epochs=10')
 parser.add_argument('--lr', type=float, default=1e-5, help='learning_rate')
+#parser.add_argument('--label_dict', type=str, default='', help='分类字典')
 parser.add_argument('--pred_file', type=str, default='', help='预测文件')
 parser.add_argument('--pred_outfile', type=str, default='', help='预测输出文件')
-parser.add_argument('--preload_model', type=str, default='', help='预加载模型文件')
 parser.add_argument('--debug', type=int, default=0, help='debug')
-parser.add_argument('--frozen', type=int, default=-1, help='frozen')
+#parser.add_argument('--num_classes', type=int, default=0, help='num_classes')
+parser.add_argument('--idx', type=int, default=0, help='idx')
 
 args = parser.parse_args()
 task = args.task
@@ -49,13 +44,18 @@ epochs = args.epochs
 learning_rate = args.lr
 batch_size = args.batch_size
 data_path = args.data_path
-model_outpath = args.model_outpath
 bert_path = args.bert_path
 #label_dict_file = args.label_dict
-label_dict_file = ''
 debug = args.debug
-frozen = args.frozen
-preload_model = args.preload_model
+idx = args.idx
+#num_classes = args.num_classes
+num_classes_list = [20, 61]
+num_classes = num_classes_list[idx]
+
+if num_classes==0:
+    print('num_classes:', num_classes)
+    sys.exit()
+
 
 maxlen = 256
 set_gelu('tanh')  # 切换gelu版本
@@ -64,12 +64,24 @@ if bert_path == '':
     if os.name=='nt':
         bert_path = r'F:\models\chinese_L-12_H-768_A-12'
     else:
-        roberta = 'chinese_roberta_wwm_large_ext_L-24_H-1024_A-16'
         bertbase = 'chinese_L-12_H-768_A-12'
+        roberta = 'chinese_roberta_wwm_large_ext_L-24_H-1024_A-16'
         bert_path = '/mnt/sda1/models/' + bertbase
 
-if preload_model == '' :
-    preload = 0
+# 不加载模型时，自动创建输出目录
+model_outpath = args.model_outpath
+
+'''
+# 分类字典默认为 数据目录下的 labels.txt
+if label_dict_file == '':
+    fname = os.path.join(data_path, 'labels.txt')
+    if os.path.exists(fname):
+        label_dict_file = fname
+'''
+
+# preload 
+if task == 'train':
+    preload = 0 
 else:
     preload = 1
 
@@ -82,9 +94,22 @@ config_path = os.path.join(bert_path, 'bert_config.json')
 checkpoint_path = os.path.join(bert_path, 'bert_model.ckpt')
 dict_path = os.path.join(bert_path, 'vocab.txt')
 
-# 建立分词器
-tokenizer = Tokenizer(dict_path, do_lower_case=True)
-# -----------------------------------------
+def load_catalog(filename):
+    ''' 加载标签字典，返回列表
+    '''
+    D = []
+    with open(filename, encoding='utf-8') as f:
+        f = f.read()
+        D = list(filter(None, f.split('\n')))
+    return D
+
+
+# 加载标签字典
+# categories = load_catalog(label_dict_file)
+# 自动计算分类数量 
+#num_classes = len(categories)
+print('num_classes:', num_classes)
+
 
 # 保存文本信息到文件
 def savetofile(txt, filename, encoding='utf-8'):
@@ -100,27 +125,25 @@ def mkfold(new_dir):
     if not os.path.exists(new_dir):
         os.makedirs(new_dir)
 
-
 def load_data(filename):
     """加载数据
-    单条格式：(年龄 文本   label_i  label_j)
-    输出格式：(年龄, 文本, [label_i, label_j])
+    单条格式：(文本+TAB+标签id)
+    输出格式：(文本, 标签id)
     """
     D = []
     with open(filename, 'r', encoding='utf-8') as f:
         data = f.read().split('\n')
         for l in data:
             x = l.strip().split('\t')
-            if len(x)==2:
-                age, text, label1, label2 = x[0], x[1], 0, 0
-            if len(x)>=4:
-                age, text, label1, label2 = x[:4]
+            if len(x)==1:
+                text, label = x[0], 0 
+            if len(x)>=2:
+                text, label = x[:2]
+                if not label.isnumeric(): continue
             if text:
-                age = int(age)
-                label = [int(label1), int(label2)]
-                D.append((age, text, label))
-    return D#[:100]
-
+                # 内容截取
+                D.append((text, int(label)))
+    return D
 
 def load_all_data(path):
     print('正在加载数据集...')
@@ -130,31 +153,42 @@ def load_all_data(path):
    
     return train_data,valid_data,test_data
 
+# 建立分词器
+tokenizer = Tokenizer(dict_path, do_lower_case=True)
 
 class data_generator(DataGenerator):
     """数据生成器
     """
     def __iter__(self, random=False):
-        batch_ages, batch_token_ids, batch_segment_ids, batch_labels = [], [], [], []
-        for is_end, (age, text, label) in self.sample(random):
-            batch_ages.append(age)
+        batch_token_ids, batch_segment_ids, batch_labels = [], [], []
+        for is_end, (text, label) in self.sample(random):
             token_ids, segment_ids = tokenizer.encode(text, maxlen=maxlen)
             batch_token_ids.append(token_ids)
             batch_segment_ids.append(segment_ids)
-            batch_labels.append(label)
+            batch_labels.append([label])
             
             if len(batch_token_ids) == self.batch_size or is_end:
-                batch_ages = np.array(batch_ages)
                 batch_token_ids = sequence_padding(batch_token_ids)
                 batch_segment_ids = sequence_padding(batch_segment_ids)
                 batch_labels = sequence_padding(batch_labels)
-                
-                batch_labels = [batch_labels[:,0], batch_labels[:,1]]
-                yield [batch_ages, batch_token_ids, batch_segment_ids], batch_labels 
-                batch_ages, batch_token_ids, batch_segment_ids, batch_labels = [], [], [], []
+                yield [batch_token_ids, batch_segment_ids], batch_labels
+                batch_token_ids, batch_segment_ids, batch_labels = [], [], []
+
+def txt2sample(text):
+    ''' 单文本编码
+    '''
+    batch_token_ids, batch_segment_ids, batch_labels = [], [], []
+    token_ids, segment_ids = tokenizer.encode(text, maxlen=maxlen)
+
+    batch_token_ids.append(token_ids)
+    batch_segment_ids.append(segment_ids)
+
+    batch_token_ids = sequence_padding(batch_token_ids)
+    batch_segment_ids = sequence_padding(batch_segment_ids)
+    return [batch_token_ids, batch_segment_ids]#, batch_labels
 
 # 创建基础模型
-def BaseModel(config_path, checkpoint_path):
+def BaseModel():
     '''搭建编码层网络,用于权重共享'''
     bert = build_transformer_model(
         config_path=config_path,
@@ -164,55 +198,28 @@ def BaseModel(config_path, checkpoint_path):
     # 输出层使用mean
     #output = Lambda(lambda x: K.mean(x, axis=1), name='MEAN-token')(bert.model.output)
     output = Lambda(lambda x: x[:, 0], name='CLS-token')(bert.model.output)
+
+    # 降维
+    # output = Dense(units=256)(output)
     return Model(bert.model.input, output, name="BERT_base")
 
-# 多任务模型
-def MModel(config_path, checkpoint_path, num_classes):
-    # BERT输入和输出
+# 创建组合
+def CModel(num_classes):
+    model_base = BaseModel()
+
+    # 输入和输出
     X1 = Input(shape=(None,), name='Input-Token')
     X2 = Input(shape=(None,), name='Input-Segment')
-    
-    model_base = BaseModel(config_path, checkpoint_path)
-    output = model_base([X1, X2])
-    
-    # 降维
-    #output = Dense(units=256, name='Layer_dense')(output)
 
-    # 年龄特征
-    age = Input(shape=(1,), name='AGE-Token')
-    # 文本特征与年龄特征融合
-    output = Concatenate(axis=1)([age, output])
-    # print('output:', output.shape) #257 或者769
+    X = model_base([X1, X2])
+    output = Dense(units=num_classes, activation='softmax')(X)
 
-    out = []
-    for i,num in enumerate(num_classes):
-        tmp = Dense(units=num, activation='softmax', name='out_%d'%i)(output)
-        out.append(tmp)
-
-    model = Model([age, X1, X2], out, name="MModel")
+    model = Model([X1, X2], output, name="ComboModel")
     return model
 
-
 print('正在创建模型...')
-# 分类大小
-num_classes = [20, 61]
-model = MModel(config_path, checkpoint_path, num_classes)
+model = CModel(num_classes)
 model.summary()
-print('model input:', model.input)
-print('model output:', model.output)
-
-# 写好函数后，启用对抗训练只需要一行代码
-# adversarial_training(model, 'Embedding-Token', 0.5)
-
-'''
-指定冻结层的索引号 -1 表示不冻结, 0,1表示冻
-'''
-if frozen >= 0:
-    layer_name = ['out_0', 'out_1'][frozen] 
-    # 冻住指定层 禁止训练
-    layer_out = model.get_layer(layer_name)
-    layer_out.trainable = False
-    print('冻结层:%s'% layer_name) 
 #sys.exit()
 
 # 派生为带分段线性学习率的优化器。
@@ -220,123 +227,64 @@ if frozen >= 0:
 AdamLR = extend_with_piecewise_linear_lr(Adam, name='AdamLR')
 
 model.compile(
-    #loss='binary_crossentropy', 
-    
-    #loss='sparse_categorical_crossentropy', 
-    loss={'out_0': 'sparse_categorical_crossentropy','out_1': 'sparse_categorical_crossentropy'},
-    loss_weights={'out_0':1, 'out_1': 1},
-    
+    loss='sparse_categorical_crossentropy', 
     #sparse_categorical_crossentropy binary_crossentropy categorical_crossentropy
     #optimizer=Adam(learning_rate),  # 用足够小的学习率
-    
     optimizer=AdamLR(learning_rate=learning_rate, lr_schedule={
         1000: 1,
         2000: 0.1
     }),
-    metrics=['acc'],
+    metrics=['accuracy'],
 )
 
-# 加载数据集
-train_data, valid_data, test_data = load_all_data(data_path)
-
-# 转换数据集
-train_generator = data_generator(train_data, batch_size)
-valid_generator = data_generator(valid_data, batch_size)
-test_generator = data_generator(test_data, batch_size)
-
-'''
-print('batch_size:', batch_size)
-for dat, label in train_generator:
-    print('label.shape:', label[0].shape)
-    print(dat)
-    print(label)
-    break;
-sys.exit()
-'''
-
 def evaluate(data):
-    '''
     total, right = 0., 0.
-    y_trues = []
-    y_preds = []
-    for x_true, y_true in t_generator:
+    for x_true, y_true in data:
         y_pred = model.predict(x_true)
-        #print('y_pred=', y_pred)
-
-        y_pred = np.array([y_pred[0].argmax(axis=1), y_pred[1].argmax(axis=1)])
-        y_preds.append(y_pred)
-
-        y_pred = np.array(list(zip(*y_pred)))
-        #y_pred = list(zip(*y_pred))
-        #print('y_pred=', y_pred)
-        #-----------------------------------------
-        #print('y_true=', y_true)
-        y_true = np.array((y_true))
-        y_trues.append(y_true)
-        #print('y_pred=', y_pred)
-        y_true = np.array(list(zip(*y_true)))
-        #print('y_true=', y_true)
+        y_pred = y_pred.argmax(axis=1)
+        y_true = y_true[:, 0]  # 取第1列, 其实是把[[1],[0],[3]]的结果转成 [1,0,3]
         total += len(y_true)
-        right += ((y_true == y_pred).sum(axis=1)==2).sum()
+        right += (y_true == y_pred).sum()
     if total == 0:
         ret = 0
     else:
         ret = right / total
-    '''
-    y_true = np.array([x[2] for x in data])
-
-    t_generator = data_generator(data, batch_size)
-    pred = model.predict_generator(t_generator.forfit(random=False), 
-                    steps=len(t_generator), verbose=0)
-
-    y_pred = np.array([pred[0].argmax(axis=1), pred[1].argmax(axis=1)])
-    y_pred = y_pred.T
-
-    #print('y_true:', y_true.shape)
-    #print('y_pred:', y_pred.shape)
-    f1 = multitask_model_score(y_true, y_pred, show=0)
-    return f1
+    
+    return ret
 
 class Evaluator(keras.callbacks.Callback):
     """评估与保存
     """
     def __init__(self):
-        self.best_val_score = 0.
+        self.best_val_acc = 0.
 
     def on_epoch_end(self, epoch, logs=None):
-        val_score = evaluate(valid_data) # valid_data valid_generator
-        if val_score > self.best_val_score:
-            self.best_val_score = val_score
+        val_acc = evaluate(valid_generator)
+        if val_acc > self.best_val_acc:
+            self.best_val_acc = val_acc
             # 创建模型输出目录
             mkfold(model_outpath)
             # 保存模型
             model.save_weights(model_file_weight)
 
         #test_acc = evaluate(test_generator)
-        print(u'val_F1: %.5f, best_val_F1: %.5f\n' %(val_score, self.best_val_score))
+        print(u'val_acc: %.5f, best_val_acc: %.5f\n' %(val_acc, self.best_val_acc))
 
 # 预测测试集并保存
-def predict_test(model, pred_file, outfile):
-
-    # 自动生成输出文件名
-    if outfile == "":
-        fname = 'submit_%s.tsv' % time.strftime('%Y%m%d_%H%M%S', time.localtime())
-        p, f = os.path.split(pred_file)
-        outfile = os.path.join(p, fname)
-
+def predict_test(model, datfile, outfile):
     # 加载数据
-    pred_data = load_data(pred_file)
+    pred_data = load_data(datfile)
     print('pred_data:', len(pred_data))
+
     pred_generator = data_generator(pred_data, batch_size)
     
     # 批量预测
     pred = model.predict_generator(pred_generator.forfit(random=False), steps=len(pred_generator), verbose=1)
+    y_pred = np.argmax(pred, axis=1)
 
-    y_pred = [pred[0].argmax(axis=1), pred[1].argmax(axis=1)]
-    # 保存预测的提交结果
-    df = pd.DataFrame({"id": range(len(y_pred[0])), "label_i":y_pred[0], "label_j":y_pred[1]})
-    df.to_csv(outfile, index=0)
-    print('提交文件已生成：%s'%outfile)
+    # 保存
+    df_pred = pd.DataFrame({"id": range(len(y_pred)), "label":y_pred})
+    df_pred.to_csv(outfile, index=0)
 
 
 # 通用训练曲线生成 
@@ -364,6 +312,19 @@ def plot_loss (model_path):
 
     print('训练曲线图已保存。')
 
+def model_score(y_true, y_pred, idx=0):
+    from sklearn.metrics import f1_score, accuracy_score, recall_score
+    
+    acc = accuracy_score(y_true, y_pred)
+    recall = accuracy_score(y_true, y_pred)
+    if idx==0:
+        f1 = f1_score(y_true, y_pred, average='macro')  #weighted  macro micro)
+        print('Accuracy:%.4f Recall:%.4f F1-macro:%.4f' % (acc, recall, f1))
+    else:
+        f1 = f1_score(y_true, y_pred, average='micro')  #weighted  macro micro)
+        print('Accuracy:%.4f Recall:%.4f F1-micro:%.4f' % (acc, recall, f1))
+    
+    return f1
 
 def calc_test_acc(y_pred, test_y):
     '''测试集准确率, 输出分类报告及混淆矩阵
@@ -412,42 +373,7 @@ def calc_test_acc(y_pred, test_y):
 
     #return y_pred, test_acc
  
-def multitask_model_score(y_true, y_pred, show=1):
-    ''' 
-    多任务模型的模型评价 用F1之和作为指标
-    '''
-    from sklearn.metrics import f1_score, accuracy_score, recall_score
-    
-    # 多少个任务
-    task_count = y_true.shape[1]
-    f1_final = 0
-    scores = []
-    for i in range(task_count):
-        if show: print( ('Task: %d'%i).center(40, '-'))
-        y_t = y_true[:, i]
-        y_p = y_pred[:, i]
-        acc = accuracy_score(y_t, y_p)
-        recall = accuracy_score(y_t, y_p)
-        if i==0:
-            f1 = f1_score(y_t, y_p, average='macro')  #weighted  macro micro)
-            if show: print('Accuracy:%.2f Recall:%.2f F1-macro:%.2f' % (acc, recall, f1))
-        else:
-            f1 = f1_score(y_t, y_p, average='micro')  #weighted  macro micro)
-            if show: print('Accuracy:%.2f Recall:%.2f F1-micro:%.2f' % (acc, recall, f1))
-                    
-        f1_final += f1
-        # 记录
-        scores.append((acc, recall, f1)) 
 
-    if show: 
-        print('F1_total:%.4f\n' % f1_final)
-    else:
-        # 单行输出
-        stxt = np.array(scores).round(4)
-        print('model score: %s F1_final:%.4f'% (stxt, f1_final))
-
-    return f1_final
-    
 if __name__ == '__main__':
     
     def save_run():
@@ -459,7 +385,7 @@ if __name__ == '__main__':
         logtxt.append ('模型输出目录:%s'% model_outpath)
         logtxt.append ('训练数据目录:%s'% data_path)
         logtxt.append ('预训练模型目录:%s'%bert_path)
-        logtxt.append ('预加载模型:%s, %s'% (preload, model_outpath))
+        #logtxt.append ('预加载模型:%s, %s'% (preload, model_path))
         logtxt.append ('训练轮数:%d'% epochs)
         logtxt.append ('学习率:%f'% learning_rate)
         logtxt.append ('batch_size:%d'% batch_size)
@@ -468,11 +394,20 @@ if __name__ == '__main__':
 
     if task == 'train':
         save_run()
-        if preload_model != '':
-            model.load_weights(preload_model)
-            print('原模型权重已加载。')
+        if preload==1:
+            model.load_weights(model_file_weight)
+            print('模型已加载。')
 
         evaluator = Evaluator()
+
+        # 加载数据集
+        train_data, valid_data, test_data =load_all_data(data_path)
+
+        # 转换数据集
+        train_generator = data_generator(train_data, batch_size)
+        valid_generator = data_generator(valid_data, batch_size)
+        test_generator = data_generator(test_data, batch_size)
+
 
         # 训练模型
         history_fit = model.fit(
@@ -489,51 +424,61 @@ if __name__ == '__main__':
         plot_loss(model_outpath)
 
     if task in ['train', 'predict']: 
-        print('正在预测测试集数据...')
-        # 加载模型权重  
+        # 批量预测
+        print('正在预测数据...')
+        
+        # 加载模型 
         model.load_weights(model_file_weight)
 
         # 加载待预测数据
         pred_file = args.pred_file
         pred_outfile = args.pred_outfile
+
         # 默认的数据
         if pred_file == '':
             pred_file = os.path.join(data_path, 'test.tsv')
         if pred_outfile == '':
             pred_outfile = os.path.join(model_outpath, 'submit.csv')
         
-        if pred_file != '' and pred_outfile != '':
-            predict_test(model, pred_file, pred_outfile)
-
+        predict_test(model, pred_file, pred_outfile)
+        print('预测结果已保存:%s' % pred_outfile)
+    
     if task in ['train', 'eval']:
-        y_true = np.array([x[2] for x in valid_data])
+        # 加载数据
+        if task == 'eval':
+            train_data, valid_data, test_data =load_all_data(data_path)
 
         # 加载验证集
-        if 1 or len(test_data) == 0:
-            data_generator = data_generator(valid_data, batch_size)
-        else:
-            data_generator = data_generator(test_data, batch_size)
+        test_generator = data_generator(valid_data, batch_size)
 
         # 加载模型
         print('正在加载模型...')
         model.load_weights(model_file_weight)
+        #if not os.path.exists(model_file_h5):
+        #    model.save(model_file_h5)
 
         print('正在验证数据集...')
-        pred = model.predict_generator(data_generator.forfit(random=False), 
-                        steps=len(data_generator), verbose=1)
+        begin = time.time()
+        y_true = [b for a,b in valid_data]
+        
+        pred = model.predict_generator(test_generator.forfit(random=False), 
+                        steps=len(test_generator), verbose=1)
 
-        y_pred = np.array([pred[0].argmax(axis=1), pred[1].argmax(axis=1)])
-        y_pred = y_pred.T
+        y_pred = np.argmax(pred, axis=1)
+        total_time = round((time.time() - begin)*1000,3)
+        print('预测数据用时%.3f毫秒.'%total_time)
 
-        # 计算多任务模型中各个任务的F1值
-        multitask_model_score(y_true, y_pred)
+        #calc_test_acc(y_pred, test_y)
+        model_score(y_true, y_pred, idx)
 
     if task == 'online': # 实时预测        
+        '''
         # 加载label字典
         label_dict = {}
         if label_dict_file:
             label_dict = load_catalog(label_dict_file)
         
+        '''
         # 加载模型
         print('正在加载模型...')
         model.load_weights(model_file_weight)
