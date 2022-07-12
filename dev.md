@@ -873,9 +873,35 @@ python multi_task_model.py --task=train \
 --adv=1 
 ```
 
-win下模拟训练:
+
+win下模拟训练命令行:
 ```
 python multi_task_model.py --task=train --epochs=1 --batch_size=16 --lr=1e-5 --data_path=data/data_split --model_outpath=model_split_wwm --splited=1 --adv=1 
+```
+
+
+训练结果：
+```
+Epoch 30/30
+1060/1060 [==============================] - 996s 940ms/step - loss: 0.0385 - out_0_loss: 0.0061 - out_1_loss: 0.0325 - out_0_acc: 0.9993 - out_1_acc: 0.9925
+model score: [(0.8903043170559094, 0.8903043170559094, 0.8878684292720402), (0.778485491861288, 0.778485491861288, 0.7784854918612879)] F1_final:1.6664
+val_F1: 1.66635, best_val_F1: 1.69013
+
+正在保存训练数据...
+训练曲线图已保存。
+正在预测测试集数据...
+pred_data: 7596
+633/633 [==============================] - 64s 102ms/step
+提交文件已生成：model_split_wwm/submit.csv
+正在加载模型...
+正在验证数据集...
+118/118 [==============================] - 12s 99ms/step
+----------------Task: 0-----------------
+Accuracy:0.90 Recall:0.90 F1-macro:0.89
+----------------Task: 1-----------------
+Accuracy:0.80 Recall:0.80 F1-micro:0.80
+F1_total:1.6901
+
 ```
 
 -----------------------------------------
@@ -909,4 +935,42 @@ python multi_task_model.py --task=train --epochs=1 --batch_size=16 --lr=1e-5 --d
 以文本分类为例，计算测试集中数据与训练集中数据的语义相似度（比如weord2vec，或者更抽象的语义编码表示），将相应高相似度的训练集数据标签，赋给测试集数据。
 ```
 
+
+
+21年 就比过一次了
+http://challenge.xfyun.cn/topic/info?type=disease-claims
+
+https://www.bilibili.com/video/BV1hq4y1r7xB?p=15
+答辩视频
+
+https://1024.iflytek.com/liveroom
+比赛总结：https://mp.weixin.qq.com/s/Wz3Wg62_2SOcXGbod_9yVQ
+加入微信竞赛群，请加小助手 coggle666
+
+
+```
+MSE = lambda y_true,y_pred: np.sum(np.power((y_true.reshape(-1,1) - y_pred),2))/len(y_true)
+
+MSE=np.sum(np.power((testY.reshape(-1,1) - predicY),2))/len(testY)
+
+y_true = np.array([2,2,2])
+y_pred = np.array([3,1.5,2])
+y_pred = np.array([3,1,2])
+
+mse = MSE(y_true, y_pred)
+
+AVE_MSE = lambda x: np.sum(np.power(( np.ones_like(x)*np.average(x) - x),2))/len(x)
+AVE_MSE(y_pred)
+```
+
+soul-天津-王亚伟(9727464)  17:15:33
+https://drive.google.com/file/d/1ccXRvaeox5XCNP_aSk_ttLBY695Erlok/view      医疗预训练模型
+
+@可西哥 可以试试这个， 估计能提1-2个点，
+
+
+感觉几个方向：
+1. -1数据集如何用上；
+2. 各字段如何拆分，模型结构的调整；
+3. spo信息的利用
 
